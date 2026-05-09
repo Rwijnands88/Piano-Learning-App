@@ -26,10 +26,33 @@ export type PianoKeyName =
   | 'A#4'
   | 'B4';
 
+export type PianoHand = 'right' | 'left' | 'both';
+
+export type FingerNumber = 1 | 2 | 3 | 4 | 5;
+
+export type NoteDuration = 'w' | 'h' | 'q' | '8' | '16';
+
+export type StepNote = {
+  key: PianoKeyName;
+  duration?: NoteDuration;
+  finger?: FingerNumber;
+  hand?: PianoHand;
+  rest?: boolean;
+};
+
+export type RecognitionMode = 'single-note' | 'melody' | 'chord' | 'manual-score';
+
 export type LessonStep = {
   text: string;
   keys: PianoKeyName[];
   expectedNote?: PianoKeyName;
+  notes?: StepNote[];
+  duration?: NoteDuration;
+  hand?: PianoHand;
+  count?: string;
+  coaching?: string;
+  scoreLabel?: string;
+  recognitionMode?: RecognitionMode;
 };
 
 export type Lesson = {
@@ -39,6 +62,13 @@ export type Lesson = {
   order: number;
   module: string;
   steps: LessonStep[];
+  level?: 'starter' | 'beginner' | 'late-beginner' | 'intermediate';
+  estimatedMinutes?: number;
+  tempo?: number;
+  timeSignature?: '2/4' | '3/4' | '4/4' | '6/8';
+  focus?: string[];
+  tags?: string[];
+  source?: 'original' | 'traditional' | 'public-domain' | 'technique';
 };
 
 export type ProgressRecord = {

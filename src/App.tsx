@@ -42,6 +42,7 @@ const LearningApp = () => {
   );
 
   const currentStep = selectedLesson?.steps[Math.min(stepIndex, Math.max(selectedLesson.steps.length - 1, 0))];
+  const expectedStepNote = currentStep?.expectedNote ?? currentStep?.keys[0];
   const lessonCompleted = Boolean(selectedLesson && completedSessionLessons.has(selectedLesson.id));
   const displayedCompletedLessonIds = useMemo(
     () => new Set([...progress.completedLessonIds, ...completedSessionLessons]),
@@ -81,23 +82,27 @@ const LearningApp = () => {
 
     setFeedback({
       tone: pitch.isListening ? 'listening' : 'idle',
-      message: pitch.isListening ? 'Luistermodus is actief. Speel de gemarkeerde toets.' : 'Microfoon wordt gestart...',
+      message:
+        currentStep.recognitionMode === 'manual-score' || !expectedStepNote
+          ? 'Lees- of telstap. Gebruik Volgende wanneer je klaar bent.'
+          : pitch.isListening
+            ? 'Luistermodus is actief. Speel de gemarkeerde toets.'
+            : 'Microfoon wordt gestart...',
     });
-  }, [currentStep, lessonCompleted, mode, pitch.isListening, screen, selectedLessonId, stepIndex]);
+  }, [currentStep, expectedStepNote, lessonCompleted, mode, pitch.isListening, screen, selectedLessonId, stepIndex]);
 
   useEffect(() => {
-    if (!currentStep || mode !== 'listen' || !pitch.detectedNote || lessonCompleted || screen !== 'practice') {
+    if (!currentStep || mode !== 'listen' || !pitch.detectedNote || !expectedStepNote || lessonCompleted || screen !== 'practice') {
       return;
     }
 
-    const expected = currentStep.expectedNote ?? currentStep.keys[0];
     const attemptKey = `${selectedLesson?.id}-${stepIndex}-${pitch.detectedNote}`;
 
     if (attemptKey === lastAcceptedNoteRef.current) {
       return;
     }
 
-    if (pitch.detectedNote === expected) {
+    if (pitch.detectedNote === expectedStepNote) {
       lastAcceptedNoteRef.current = attemptKey;
       setFeedback({ tone: 'success', message: `${pitch.detectedNote.replace('#', '♯')} klopt. Door naar de volgende stap.` });
       autoAdvanceTimerRef.current = window.setTimeout(() => {
@@ -106,10 +111,10 @@ const LearningApp = () => {
     } else {
       setFeedback({
         tone: 'error',
-        message: `${pitch.detectedNote.replace('#', '♯')} gehoord. Probeer ${expected.replace('#', '♯')}.`,
+        message: `${pitch.detectedNote.replace('#', '♯')} gehoord. Probeer ${expectedStepNote.replace('#', '♯')}.`,
       });
     }
-  }, [currentStep, lessonCompleted, mode, pitch.detectedNote, screen, selectedLesson?.id, stepIndex]);
+  }, [currentStep, expectedStepNote, lessonCompleted, mode, pitch.detectedNote, screen, selectedLesson?.id, stepIndex]);
 
   useEffect(() => {
     return () => {
@@ -185,6 +190,9 @@ const LearningApp = () => {
     }
 
     const expected = currentStep.expectedNote ?? currentStep.keys[0];
+    if (!expected) {
+      return;
+    }
     setManualDetectedNote(note);
 
     if (note === expected) {

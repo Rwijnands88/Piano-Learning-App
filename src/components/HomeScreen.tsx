@@ -126,7 +126,7 @@ export const HomeScreen = ({
                 >
                   <span>{completed ? <CheckCircle2 aria-hidden="true" /> : String(index + 1).padStart(2, '0')}</span>
                   <strong>{lesson.title}</strong>
-                  <small>{lesson.steps.length} stappen</small>
+                <small>{lesson.steps.length} stappen{lesson.estimatedMinutes ? ` · ${lesson.estimatedMinutes} min` : ''}</small>
                 </button>
               );
             })}
@@ -154,7 +154,7 @@ export const HomeScreen = ({
                       {completed ? <CheckCircle2 aria-hidden="true" /> : lesson.order / 10}
                     </span>
                     <strong>{lesson.title}</strong>
-                    <small>{lesson.steps.length} stappen</small>
+                    <small>{lesson.steps.length} stappen{lesson.estimatedMinutes ? ` · ${lesson.estimatedMinutes} min` : ''}</small>
                   </button>
                 );
               })}

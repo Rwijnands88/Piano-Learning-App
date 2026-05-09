@@ -40,8 +40,17 @@ export const PracticeScreen = ({
   onRestart,
 }: PracticeScreenProps) => {
   const progress = ((stepIndex + 1) / lesson.steps.length) * 100;
-  const currentKeys = prettyKeys(step.keys);
+  const currentKeys = step.keys.length > 0 ? prettyKeys(step.keys) : 'rust';
   const featuredKey = step.expectedNote ?? step.keys[0];
+  const hand = step.hand ?? step.notes?.find((note) => note.hand)?.hand;
+  const handLabel = hand === 'right' ? 'Rechterhand' : hand === 'left' ? 'Linkerhand' : hand === 'both' ? 'Beide handen' : '';
+  const fingerLabel = step.notes?.map((note) => note.finger).filter(Boolean).join('-');
+  const stepDetails = [
+    `Speel: ${currentKeys}`,
+    handLabel,
+    fingerLabel ? `vingers ${fingerLabel}` : '',
+    step.count ? `tel ${step.count}` : '',
+  ].filter(Boolean).join(' · ');
   const feedbackLabel = {
     idle: 'Klaar',
     listening: 'Luistert',
@@ -91,14 +100,14 @@ export const PracticeScreen = ({
           <div className="premium-score-copy">
             <span>Stap {stepIndex + 1}/{lesson.steps.length}</span>
             <h1>{completed ? 'Les afgerond' : step.text}</h1>
-            <p>{completed ? 'Je voortgang is opgeslagen. Kies straks de volgende les in het menu.' : `Speel: ${currentKeys}`}</p>
+            <p>{completed ? 'Je voortgang is opgeslagen. Kies straks de volgende les in het menu.' : stepDetails}</p>
           </div>
-          <ScoreRenderer feedbackTone={feedback.tone} stepIndex={stepIndex} steps={lesson.steps} />
+          <ScoreRenderer feedbackTone={feedback.tone} stepIndex={stepIndex} steps={lesson.steps} timeSignature={lesson.timeSignature} />
         </section>
 
         <aside className={`premium-coach ${feedback.tone}`}>
           <span>{feedbackLabel}</span>
-          <strong>{featuredKey.replace('#', '♯')}</strong>
+          <strong>{featuredKey ? featuredKey.replace('#', '♯') : 'Rust'}</strong>
           <p>{feedback.message}</p>
           <div className="premium-feedback-meter">
             <i />
@@ -113,10 +122,10 @@ export const PracticeScreen = ({
           <dl>
             <div>
               <dt>Verwacht</dt>
-              <dd>{featuredKey.replace('#', '♯')}</dd>
+              <dd>{featuredKey ? featuredKey.replace('#', '♯') : 'Rust'}</dd>
             </div>
             <div>
-              <dt>Akkoord</dt>
+              <dt>Toetsen</dt>
               <dd>{currentKeys}</dd>
             </div>
           </dl>

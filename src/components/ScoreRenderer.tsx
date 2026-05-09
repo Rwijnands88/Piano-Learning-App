@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { prettyKeys } from '../data/piano';
 import { loadVexFlow } from '../lib/vexflowLoader';
-import type { FeedbackState, LessonStep, PianoKeyName } from '../types';
+import type { FeedbackState, LessonStep, PianoKeyName, StepNote } from '../types';
 
 type ScoreRendererProps = {
   steps: LessonStep[];
   stepIndex: number;
   feedbackTone: FeedbackState['tone'];
+  timeSignature?: string;
 };
 
 const BEATS_PER_SYSTEM = 4;
@@ -32,6 +33,48 @@ const toVexKey = (note: PianoKeyName) => {
 
 const labelForStep = (step: LessonStep) => prettyKeys(step.keys).replaceAll(' - ', ' ');
 
+const notesForStep = (step: LessonStep): StepNote[] =>
+  step.notes?.length
+    ? step.notes
+    : step.keys.map((key) => ({
+        key,
+        duration: step.duration ?? 'q',
+        hand: step.hand,
+      }));
+
+const durationBeats = (duration = 'q') => {
+  if (duration === 'w') {
+    return 4;
+  }
+
+  if (duration === 'h') {
+    return 2;
+  }
+
+  if (duration === '8') {
+    return 0.5;
+  }
+
+  if (duration === '16') {
+    return 0.25;
+  }
+
+  return 1;
+};
+
+const scoreLabelForStep = (step: LessonStep) => {
+  if (step.scoreLabel) {
+    return step.scoreLabel;
+  }
+
+  const notes = notesForStep(step);
+  const fingers = notes.map((note) => note.finger).filter(Boolean).join('-');
+  const hand = step.hand ?? notes.find((note) => note.hand)?.hand;
+  const handLabel = hand === 'right' ? 'RH' : hand === 'left' ? 'LH' : hand === 'both' ? '2H' : '';
+
+  return [handLabel, fingers].filter(Boolean).join(' ') || labelForStep(step);
+};
+
 const styleForStep = (absoluteIndex: number, currentIndex: number, feedbackTone: FeedbackState['tone']) => {
   if (absoluteIndex !== currentIndex) {
     return { fillStyle: scoreColors.ink, strokeStyle: scoreColors.ink };
@@ -49,7 +92,7 @@ const styleForStep = (absoluteIndex: number, currentIndex: number, feedbackTone:
 };
 
 const clefForSteps = (steps: LessonStep[]) => {
-  const notes = steps.flatMap((step) => step.keys);
+  const notes = steps.flatMap((step) => notesForStep(step).filter((note) => !note.rest).map((note) => note.key));
   const average = notes.reduce((total, note) => total + noteToMidi(note), 0) / Math.max(notes.length, 1);
   return average < 60 ? 'bass' : 'treble';
 };
@@ -62,7 +105,7 @@ const getSystemWindow = (steps: LessonStep[], stepIndex: number) => {
   }));
 };
 
-export const ScoreRenderer = ({ steps, stepIndex, feedbackTone }: ScoreRendererProps) => {
+export const ScoreRenderer = ({ steps, stepIndex, feedbackTone, timeSignature = '4/4' }: ScoreRendererProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const renderRequestRef = useRef(0);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -124,30 +167,33 @@ export const ScoreRenderer = ({ steps, stepIndex, feedbackTone }: ScoreRendererP
         });
         stave
           .addClef(clef)
-          .addTimeSignature('4/4')
+          .addTimeSignature(timeSignature)
           .setStyle({ fillStyle: scoreColors.ink, strokeStyle: scoreColors.ink });
         stave.setDefaultLedgerLineStyle({ strokeStyle: 'rgba(17, 17, 24, 0.7)', lineWidth: 1.4 });
         stave.setContext(context).draw();
 
         const notes = systemSteps.map(({ step, absoluteIndex }) => {
           const style = styleForStep(absoluteIndex, stepIndex, feedbackTone);
+          const stepNotes = notesForStep(step);
+          const duration = stepNotes[0]?.duration ?? step.duration ?? 'q';
+          const isRest = stepNotes.length > 0 && stepNotes.every((stepNote) => stepNote.rest);
           const note = new StaveNote({
-            keys: step.keys.map(toVexKey),
-            duration: 'q',
+            keys: isRest ? ['b/4'] : stepNotes.map((stepNote) => toVexKey(stepNote.key)),
+            duration: isRest ? `${duration}r` : duration,
             clef,
             autoStem: true,
           });
 
-          step.keys.forEach((key, keyIndex) => {
+          stepNotes.forEach(({ key }, keyIndex) => {
             note.setKeyStyle(keyIndex, style);
 
-            if (key.includes('#')) {
+            if (!isRest && key.includes('#')) {
               const accidental = new Accidental('#').setStyle(style);
               note.addModifier(accidental, keyIndex);
             }
           });
 
-          const label = new Annotation(labelForStep(step))
+          const label = new Annotation(scoreLabelForStep(step))
             .setFont('Inter, Arial, sans-serif', compact ? 9 : 12, 800)
             .setJustification(AnnotationHorizontalJustify.CENTER)
             .setVerticalJustification(AnnotationVerticalJustify.BOTTOM)
@@ -160,7 +206,11 @@ export const ScoreRenderer = ({ steps, stepIndex, feedbackTone }: ScoreRendererP
           return note;
         });
 
-        const voice = new Voice({ numBeats: BEATS_PER_SYSTEM, beatValue: 4 }).setMode(Voice.Mode.SOFT);
+        const totalBeats = systemSteps.reduce((total, { step }) => {
+          const stepNotes = notesForStep(step);
+          return total + durationBeats(stepNotes[0]?.duration ?? step.duration ?? 'q');
+        }, 0);
+        const voice = new Voice({ numBeats: Math.max(BEATS_PER_SYSTEM, Math.ceil(totalBeats)), beatValue: 4 }).setMode(Voice.Mode.SOFT);
         voice.addTickables(notes);
 
         new Formatter().joinVoices([voice]).format([voice], Math.max(compact ? 150 : 220, staveWidth - (compact ? 64 : 110)));
