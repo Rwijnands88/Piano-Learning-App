@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isMusicSource() {
+      return request.resource != null
+        && request.resource.size < 50 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('audio/.*')
+          || request.resource.contentType == 'audio/midi'
+          || request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'application/vnd.recordare.musicxml+xml'
+          || request.resource.contentType == 'text/xml'
+          || request.resource.contentType == 'image/jpeg'
+          || request.resource.contentType == 'image/png'
+        );
+    }
+
+    match /users/{userId}/music-uploads/{fileName} {
+      allow read, delete: if owns(userId);
+      allow create, update: if owns(userId) && isMusicSource();
+    }
+
+    match /users/{userId}/converted-lessons/{fileName} {
+      allow read, write, delete: if owns(userId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

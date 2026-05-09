@@ -51,13 +51,30 @@ npm run dev
 
 Vul `.env` met de waarden uit Firebase Console > Project settings > Your apps > Web app.
 
+## Privé muziekbestanden
+
+Muziekbestanden horen niet in GitHub of in Vercel assets. Zet ze in Firebase Storage onder:
+
+```text
+users/{uid}/music-uploads/
+users/{uid}/converted-lessons/
+```
+
+`storage.rules` staat alleen reads/writes toe voor de ingelogde eigenaar van die map. De app-code kan hiervoor `uploadPrivateMusicFile` uit `src/lib/musicStorage.ts` gebruiken. Ondersteunde bronbestanden zijn audio, MIDI, MusicXML, PDF en JPG/PNG scans tot 50 MB.
+
+Zet Firebase Storage eerst eenmalig aan via Firebase Console > Storage > Get Started. Daarna kun je de regels deployen met:
+
+```bash
+firebase deploy --only storage
+```
+
 ## Firebase deployment
 
 ```bash
 npm run build
 firebase login
 firebase use --add
-firebase deploy
+firebase deploy --only firestore:rules,storage
 ```
 
 Zet in Firebase Console ook Email/Password sign-in aan onder Authentication > Sign-in method.
