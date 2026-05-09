@@ -2944,6 +2944,22 @@ p {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .premium-score {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .score-renderer {
+    min-height: 96px;
+    border-radius: 12px;
+  }
+
+  .score-playhead {
+    top: 6%;
+    bottom: 8%;
+    width: 3px;
+  }
+
   .premium-coach {
     display: none;
   }

@@ -100,10 +100,11 @@ export const ScoreRenderer = ({ steps, stepIndex, feedbackTone }: ScoreRendererP
           return;
         }
 
-        const width = Math.max(container.clientWidth, 360);
-        const height = Math.max(container.clientHeight, 210);
-        const staveX = Math.max(18, width * 0.025);
-        const staveY = Math.max(26, height * 0.18);
+        const compact = container.clientWidth < 520 || container.clientHeight < 150;
+        const width = Math.max(container.clientWidth, compact ? 280 : 360);
+        const height = Math.max(container.clientHeight, compact ? 118 : 210);
+        const staveX = compact ? Math.max(10, width * 0.018) : Math.max(18, width * 0.025);
+        const staveY = compact ? Math.max(8, height * 0.08) : Math.max(26, height * 0.18);
         const staveWidth = width - staveX * 2;
         const clef = clefForSteps(systemSteps.map(({ step }) => step));
 
@@ -114,12 +115,12 @@ export const ScoreRenderer = ({ steps, stepIndex, feedbackTone }: ScoreRendererP
         const context = renderer.getContext();
         context.setFillStyle(scoreColors.ink);
         context.setStrokeStyle(scoreColors.ink);
-        context.setFont('Inter, Arial, sans-serif', 12, 600);
+        context.setFont('Inter, Arial, sans-serif', compact ? 9 : 12, 600);
 
         const stave = new Stave(staveX, staveY, staveWidth, {
-          spacingBetweenLinesPx: Math.max(12, Math.min(18, height * 0.065)),
+          spacingBetweenLinesPx: compact ? Math.max(8, Math.min(11, height * 0.08)) : Math.max(12, Math.min(18, height * 0.065)),
           spaceAboveStaffLn: 1,
-          spaceBelowStaffLn: 4,
+          spaceBelowStaffLn: compact ? 2 : 4,
         });
         stave
           .addClef(clef)
@@ -147,7 +148,7 @@ export const ScoreRenderer = ({ steps, stepIndex, feedbackTone }: ScoreRendererP
           });
 
           const label = new Annotation(labelForStep(step))
-            .setFont('Inter, Arial, sans-serif', 12, 800)
+            .setFont('Inter, Arial, sans-serif', compact ? 9 : 12, 800)
             .setJustification(AnnotationHorizontalJustify.CENTER)
             .setVerticalJustification(AnnotationVerticalJustify.BOTTOM)
             .setStyle({ fillStyle: absoluteIndex === stepIndex ? style.fillStyle : scoreColors.muted });
@@ -162,7 +163,7 @@ export const ScoreRenderer = ({ steps, stepIndex, feedbackTone }: ScoreRendererP
         const voice = new Voice({ numBeats: BEATS_PER_SYSTEM, beatValue: 4 }).setMode(Voice.Mode.SOFT);
         voice.addTickables(notes);
 
-        new Formatter().joinVoices([voice]).format([voice], Math.max(220, staveWidth - 110));
+        new Formatter().joinVoices([voice]).format([voice], Math.max(compact ? 150 : 220, staveWidth - (compact ? 64 : 110)));
         voice.draw(context, stave);
         setLoadState('ready');
       } catch {
