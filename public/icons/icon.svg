@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Piano Studio">
+  <rect width="512" height="512" rx="96" fill="#090b10"/>
+  <rect x="76" y="144" width="360" height="224" rx="28" fill="#f5f7fb"/>
+  <path d="M118 144v224M170 144v224M222 144v224M290 144v224M342 144v224M394 144v224" stroke="#d1d8e6" stroke-width="12"/>
+  <rect x="139" y="144" width="42" height="134" rx="12" fill="#10151f"/>
+  <rect x="191" y="144" width="42" height="134" rx="12" fill="#10151f"/>
+  <rect x="311" y="144" width="42" height="134" rx="12" fill="#10151f"/>
+  <rect x="363" y="144" width="42" height="134" rx="12" fill="#10151f"/>
+  <circle cx="256" cy="388" r="28" fill="#31d0aa"/>
+</svg>

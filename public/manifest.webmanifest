@@ -1,0 +1,18 @@
+{
+  "name": "Piano Studio",
+  "short_name": "Piano",
+  "description": "Interactieve piano-leerapp voor naast een echte piano.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090b10",
+  "theme_color": "#090b10",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
