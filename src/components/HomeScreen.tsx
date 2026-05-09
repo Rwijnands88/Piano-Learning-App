@@ -1,4 +1,4 @@
-import { CheckCircle2, LogOut, Piano, Play, UserRound } from 'lucide-react';
+import { BookOpen, CheckCircle2, Gauge, Hand, LogOut, Mic, Piano, Play, UserRound } from 'lucide-react';
 import type { Lesson } from '../types';
 
 type HomeScreenProps = {
@@ -73,6 +73,37 @@ export const HomeScreen = ({
           <span>lessen afgerond</span>
         </section>
       </div>
+
+      <section className="home-mode-menu" aria-label="Hoofdmenu">
+        <button className="home-menu-tile primary" onClick={onStartPractice} type="button">
+          <Play aria-hidden="true" />
+          <span>
+            <strong>Oefenen</strong>
+            <small>Ga naar de rustige oefenmodus</small>
+          </span>
+        </button>
+        <div className="home-menu-tile">
+          <BookOpen aria-hidden="true" />
+          <span>
+            <strong>Lessen</strong>
+            <small>{lessons.length} lessen beschikbaar</small>
+          </span>
+        </div>
+        <div className="home-menu-tile">
+          <Gauge aria-hidden="true" />
+          <span>
+            <strong>Voortgang</strong>
+            <small>{completedCount} afgerond</small>
+          </span>
+        </div>
+        <div className="home-menu-tile">
+          <span className="dual-icons"><Mic aria-hidden="true" /><Hand aria-hidden="true" /></span>
+          <span>
+            <strong>Modus</strong>
+            <small>Luisteren of handmatig in de oefenruimte</small>
+          </span>
+        </div>
+      </section>
 
       <nav className="home-menu" aria-label="Lesmenu">
         {Object.entries(modules).map(([module, moduleLessons]) => (

@@ -3,7 +3,7 @@
   "short_name": "Piano",
   "description": "Interactieve piano-leerapp voor naast een echte piano.",
   "start_url": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#090b10",
   "theme_color": "#090b10",
   "orientation": "landscape",

@@ -9,6 +9,14 @@
   -webkit-font-smoothing: antialiased;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  background: #070809;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -16,7 +24,8 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
   background:
     linear-gradient(140deg, rgba(49, 208, 170, 0.12), transparent 30%),
     linear-gradient(210deg, rgba(255, 197, 92, 0.1), transparent 34%),
@@ -40,9 +49,13 @@ button:disabled {
 .loading-screen,
 .auth-shell {
   display: grid;
-  min-height: 100vh;
+  min-height: 100dvh;
   place-items: center;
-  padding: 32px;
+  padding:
+    max(32px, env(safe-area-inset-top))
+    max(32px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom))
+    max(32px, env(safe-area-inset-left));
 }
 
 .portrait-gate {
@@ -207,8 +220,13 @@ p {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 14px;
-  min-height: 100vh;
-  padding: 18px;
+  width: 100%;
+  min-height: 100dvh;
+  padding:
+    max(18px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
   background:
     radial-gradient(circle at 8% 10%, rgba(209, 170, 96, 0.13), transparent 30%),
     linear-gradient(180deg, #0b0b0c, #12100d 48%, #070707);
@@ -293,7 +311,7 @@ p {
 
 .home-screen {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 18px;
   min-height: 0;
 }
@@ -375,6 +393,37 @@ p {
   min-height: 220px;
   overflow: hidden;
   padding: 28px;
+  background:
+    linear-gradient(110deg, rgba(12, 8, 5, 0.72), rgba(32, 21, 12, 0.34) 52%, rgba(255, 230, 176, 0.1)),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 8px),
+    linear-gradient(90deg, #2a170b, #7a4823 45%, #211109);
+}
+
+.home-continue::before {
+  content: '';
+  position: absolute;
+  inset: -30% -10% auto auto;
+  width: 52%;
+  height: 140%;
+  background: linear-gradient(115deg, transparent, rgba(255, 222, 161, 0.34), transparent 72%);
+  filter: blur(10px);
+  transform: rotate(9deg);
+}
+
+.home-continue::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 38%;
+  background:
+    linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.34)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0 2px, transparent 2px 64px);
+}
+
+.home-continue > div:not(.home-piano-rail),
+.home-play-button {
+  position: relative;
+  z-index: 2;
 }
 
 .home-continue h2 {
@@ -455,6 +504,76 @@ p {
 .home-progress span {
   color: #cfc5b2;
   font-weight: 800;
+}
+
+.home-mode-menu {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.home-menu-tile {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  align-items: center;
+  gap: 12px;
+  min-height: 92px;
+  border: 1px solid rgba(255, 241, 201, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), transparent 46%),
+    rgba(255, 250, 238, 0.06);
+  color: #fff8ea;
+  padding: 14px;
+  text-align: left;
+}
+
+.home-menu-tile.primary {
+  border-color: rgba(215, 167, 73, 0.5);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.18), transparent 48%),
+    rgba(215, 167, 73, 0.18);
+}
+
+.home-menu-tile svg,
+.dual-icons {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 248, 236, 0.1);
+  color: #d7a749;
+}
+
+.home-menu-tile svg {
+  padding: 12px;
+}
+
+.dual-icons {
+  grid-template-columns: 1fr 1fr;
+}
+
+.dual-icons svg {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+}
+
+.home-menu-tile span:not(.dual-icons) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.home-menu-tile strong {
+  font-size: 1.04rem;
+}
+
+.home-menu-tile small {
+  color: #c7bca9;
+  line-height: 1.25;
 }
 
 .home-menu {
@@ -1578,7 +1697,332 @@ p {
   }
 }
 
-@media (orientation: portrait) {
+@media (orientation: landscape) and (max-width: 1180px) {
+  .app-shell {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .home-screen {
+    gap: 12px;
+  }
+
+  .home-layout {
+    grid-template-columns: minmax(0, 1fr) 210px;
+    gap: 10px;
+  }
+
+  .home-continue {
+    min-height: 180px;
+    padding: 20px;
+  }
+
+  .home-continue h2 {
+    font-size: clamp(1.7rem, 4vw, 3.2rem);
+  }
+
+  .home-progress {
+    min-height: 180px;
+    padding: 18px;
+  }
+
+  .home-progress strong {
+    font-size: 3rem;
+  }
+
+  .home-mode-menu {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .home-menu-tile {
+    grid-template-columns: 42px 1fr;
+    min-height: 78px;
+    padding: 10px;
+  }
+
+  .home-menu-tile svg,
+  .dual-icons {
+    width: 42px;
+    height: 42px;
+  }
+
+  .home-menu-tile small {
+    font-size: 0.75rem;
+  }
+
+  .home-menu-section {
+    padding: 12px;
+  }
+
+  .home-lesson-row {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 8px;
+  }
+
+  .home-lesson-card {
+    min-height: 74px;
+    padding: 10px;
+  }
+
+  .practice-screen {
+    grid-template-rows: auto 5px minmax(0, 1fr) auto minmax(150px, 24vh);
+    gap: 8px;
+  }
+
+  .practice-main {
+    grid-template-columns: minmax(0, 1.25fr) minmax(230px, 0.55fr);
+    gap: 8px;
+  }
+
+  .practice-score-board {
+    grid-template-columns: minmax(0, 1.1fr) minmax(240px, 0.9fr);
+  }
+
+  .practice-instruction {
+    padding: 18px;
+  }
+
+  .practice-instruction h1 {
+    font-size: clamp(1.45rem, 3.2vw, 2.8rem);
+  }
+
+  .practice-feedback {
+    padding: 16px;
+  }
+
+  .practice-controls .primary-button,
+  .practice-controls .secondary-button {
+    min-height: 42px;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .app-shell {
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 100dvh;
+    overflow-y: auto;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      max(76px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .system-note {
+    font-size: 0.78rem;
+    padding: 7px 10px;
+  }
+
+  .home-top {
+    gap: 10px;
+  }
+
+  .home-top h1 {
+    font-size: 1.7rem;
+  }
+
+  .brand-mark.small {
+    width: 38px;
+    height: 38px;
+  }
+
+  .home-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .home-continue {
+    min-height: 150px;
+    padding: 16px;
+  }
+
+  .home-continue h2 {
+    font-size: 2rem;
+  }
+
+  .home-continue p {
+    font-size: 0.9rem;
+  }
+
+  .home-play-button {
+    min-width: 150px;
+    min-height: 52px;
+  }
+
+  .home-progress {
+    display: none;
+  }
+
+  .home-mode-menu {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .home-menu-tile {
+    grid-template-columns: 36px minmax(0, 1fr);
+    min-height: 66px;
+    gap: 9px;
+    padding: 9px;
+  }
+
+  .home-menu-tile svg,
+  .dual-icons {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+  }
+
+  .home-menu-tile svg {
+    padding: 9px;
+  }
+
+  .dual-icons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+  }
+
+  .dual-icons svg {
+    width: 17px;
+    height: 17px;
+    min-width: 17px;
+    padding: 0;
+  }
+
+  .home-menu-tile strong {
+    font-size: 0.94rem;
+  }
+
+  .home-menu-tile small {
+    overflow: hidden;
+    font-size: 0.72rem;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .home-account span {
+    display: none;
+  }
+
+  .home-menu-section h2 {
+    font-size: 0.74rem;
+  }
+
+  .home-menu {
+    min-height: 160px;
+  }
+
+  .practice-main {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-feedback {
+    display: none;
+  }
+
+  .practice-score-board {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
+  }
+}
+
+@media (orientation: landscape) and (max-width: 1180px) {
+  .home-screen {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.05fr) minmax(270px, 0.95fr);
+    grid-template-areas:
+      "top top"
+      "hero tiles";
+    gap: 8px;
+    min-height: 100%;
+  }
+
+  .home-top {
+    grid-area: top;
+  }
+
+  .home-layout {
+    grid-area: hero;
+    min-height: 0;
+  }
+
+  .home-mode-menu {
+    grid-area: tiles;
+    grid-template-columns: 1fr;
+    align-content: start;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .home-menu {
+    display: none;
+  }
+
+  .home-continue {
+    grid-template-columns: 1fr;
+    align-content: center;
+    min-height: min(270px, calc(100dvh - 78px));
+    height: 100%;
+  }
+
+  .home-continue h2 {
+    max-width: 100%;
+    font-size: clamp(1.3rem, 4vw, 2rem);
+    line-height: 0.96;
+  }
+
+  .home-continue p {
+    max-width: 30ch;
+  }
+
+  .home-play-button {
+    justify-self: start;
+    min-width: 132px;
+    min-height: 44px;
+    margin-top: 8px;
+    font-size: 0.9rem;
+  }
+
+  .home-piano-rail {
+    display: none;
+  }
+
+  .home-menu-tile {
+    min-height: 58px;
+  }
+
+  .home-menu-tile small {
+    white-space: normal;
+  }
+
+  .practice-screen {
+    grid-template-rows: auto 4px minmax(0, 1fr) minmax(110px, 28vh);
+  }
+
+  .practice-controls {
+    display: none;
+  }
+
+  .practice-score-board {
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 0.62fr);
+  }
+
+  .practice-instruction {
+    padding: 12px;
+  }
+
+  .practice-instruction h1 {
+    font-size: clamp(1.15rem, 3vw, 1.8rem);
+  }
+
+  .practice-instruction p {
+    font-size: 0.9rem;
+  }
+}
+
+@media (orientation: portrait), (max-aspect-ratio: 1/1) {
   .portrait-gate {
     position: fixed;
     z-index: 1000;
