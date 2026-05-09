@@ -33,8 +33,15 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef<number | null>(null);
+  const isListeningRef = useRef(false);
+  const isStartingRef = useRef(false);
+  const sessionRef = useRef(0);
 
   const stop = useCallback(() => {
+    sessionRef.current += 1;
+    isStartingRef.current = false;
+    isListeningRef.current = false;
+
     if (frameRef.current !== null) {
       cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
@@ -56,7 +63,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
   }, []);
 
   const start = useCallback(async () => {
-    if (isListening || mode !== 'listen' || !enabled) {
+    if (isListeningRef.current || isStartingRef.current || mode !== 'listen' || !enabled) {
       return;
     }
 
@@ -64,6 +71,10 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
       setError('Deze browser ondersteunt geen microfoon-toegang.');
       return;
     }
+
+    const session = sessionRef.current + 1;
+    sessionRef.current = session;
+    isStartingRef.current = true;
 
     try {
       resetError();
@@ -81,6 +92,13 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
 
+      if (session !== sessionRef.current || mode !== 'listen' || !enabled) {
+        source.disconnect();
+        stream.getTracks().forEach((track) => track.stop());
+        void audioContext.close();
+        return;
+      }
+
       const input = new Float32Array(analyser.fftSize);
       const detector = PitchDetector.forFloat32Array(input.length);
 
@@ -90,9 +108,15 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
       streamRef.current = stream;
       setPermissionDenied(false);
       setError('');
+      isStartingRef.current = false;
+      isListeningRef.current = true;
       setIsListening(true);
 
       const tick = () => {
+        if (session !== sessionRef.current) {
+          return;
+        }
+
         analyser.getFloatTimeDomainData(input);
         const [nextFrequency, nextClarity] = detector.findPitch(input, audioContext.sampleRate);
 
@@ -109,6 +133,10 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
 
       tick();
     } catch (caught) {
+      if (session !== sessionRef.current) {
+        return;
+      }
+
       const name = typeof caught === 'object' && caught && 'name' in caught ? String(caught.name) : '';
       const denied = name === 'NotAllowedError' || name === 'PermissionDeniedError';
       setPermissionDenied(denied);
@@ -118,8 +146,12 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
           : 'De microfoon kon niet gestart worden. Handmatige modus is actief.',
       );
       stop();
+    } finally {
+      if (session === sessionRef.current) {
+        isStartingRef.current = false;
+      }
     }
-  }, [enabled, isListening, mode, resetError, stop]);
+  }, [enabled, mode, resetError, stop]);
 
   useEffect(() => {
     if (mode === 'listen' && enabled) {

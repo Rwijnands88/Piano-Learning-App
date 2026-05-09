@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AuthScreen } from './components/AuthScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { PracticeScreen } from './components/PracticeScreen';
-import { UiDemos } from './components/UiDemos';
 import { useAuth } from './hooks/useAuth';
 import { useLessons } from './hooks/useLessons';
 import { usePitchDetection } from './hooks/usePitchDetection';
@@ -240,4 +239,6 @@ const LearningApp = () => {
   );
 };
 
-export const App = () => (window.location.pathname === '/ui-demos' ? <UiDemos /> : <LearningApp />);
+export const App = () => {
+  return <LearningApp />;
+};

@@ -1,7 +1,6 @@
-import { ArrowLeft, ArrowRight, Check, Home, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, Hand, Mic, RotateCcw } from 'lucide-react';
 import { prettyKeys } from '../data/piano';
-import { ModeToggle } from './ModeToggle';
-import { PianoKeyboard } from './PianoKeyboard';
+import { PremiumKeyboard } from './PremiumKeyboard';
 import type { FeedbackState, LearningMode, Lesson, LessonStep, PianoKeyName } from '../types';
 
 type PracticeScreenProps = {
@@ -39,79 +38,111 @@ export const PracticeScreen = ({
 }: PracticeScreenProps) => {
   const progress = ((stepIndex + 1) / lesson.steps.length) * 100;
   const currentKeys = prettyKeys(step.keys);
+  const featuredKey = step.expectedNote ?? step.keys[0];
+  const feedbackLabel = {
+    idle: 'Klaar',
+    listening: 'Luistert',
+    success: 'Goed',
+    warning: 'Let op',
+    error: 'Nog eens',
+  }[feedback.tone];
 
   return (
-    <section className="practice-screen" aria-label="Oefenmodus">
-      <header className="practice-topbar">
-        <button className="secondary-button compact" onClick={onBackHome} type="button">
-          <Home aria-hidden="true" />
-          Menu
+    <section className="premium-stage premium-live-stage premium-practice-live" aria-label="Oefenmodus">
+      <header className="premium-practice-top">
+        <button className="premium-round" onClick={onBackHome} type="button" aria-label="Terug naar menu">
+          <ChevronLeft aria-hidden="true" />
         </button>
-        <div className="practice-title">
+        <div>
           <span>{lesson.module}</span>
           <strong>{lesson.title}</strong>
         </div>
-        <ModeToggle isListening={isListening} mode={mode} onChange={onModeChange} />
+
+        <div className="premium-mode-cluster" role="group" aria-label="Leermodus">
+          <button
+            className={mode === 'listen' ? 'listening' : ''}
+            onClick={() => onModeChange('listen')}
+            type="button"
+          >
+            <Mic aria-hidden="true" />
+            Luisteren
+            {mode === 'listen' && isListening ? <i aria-label="Microfoon actief" /> : null}
+          </button>
+          <button
+            className={mode === 'manual' ? 'listening' : ''}
+            onClick={() => onModeChange('manual')}
+            type="button"
+          >
+            <Hand aria-hidden="true" />
+            Handmatig
+          </button>
+        </div>
       </header>
 
-      <div className="practice-progress" aria-label="Lesvoortgang">
+      <div className="premium-progress" aria-label="Lesvoortgang">
         <span style={{ width: `${progress}%` }} />
       </div>
 
-      <div className="practice-main">
-        <section className="practice-score-board">
-          <div className="practice-staff" aria-hidden="true">
-            <div className="practice-clef">𝄞</div>
-            <div className="practice-playhead" />
+      <div className="premium-practice-stage">
+        <section className="premium-score" aria-label="Lesstap">
+          <div className="premium-clef" aria-hidden="true">𝄞</div>
+          <div className="premium-playline" aria-hidden="true" />
+          <div className="premium-barline one" aria-hidden="true" />
+          <div className="premium-barline two" aria-hidden="true" />
+          <div className="premium-score-copy">
+            <span>Stap {stepIndex + 1}/{lesson.steps.length}</span>
+            <h1>{completed ? 'Les afgerond' : step.text}</h1>
+            <p>{completed ? 'Je voortgang is opgeslagen. Kies straks de volgende les in het menu.' : `Speel: ${currentKeys}`}</p>
+          </div>
+          <div className="premium-staff" aria-hidden="true">
             {Array.from({ length: 5 }, (_, index) => (
-              <span className="practice-staff-line" key={index} style={{ top: `${28 + index * 10}%` }} />
+              <span className="premium-staff-line" key={index} style={{ top: `${30 + index * 9}%` }} />
             ))}
             {step.keys.map((key, index) => (
-              <span className={`practice-note note-${index}`} key={key}>
+              <span className={`premium-note n-${index}`} key={key}>
                 {key.replace('#', '♯')}
               </span>
             ))}
           </div>
-
-          <div className="practice-instruction">
-            <span className="step-pill">Stap {stepIndex + 1}/{lesson.steps.length}</span>
-            <h1>{completed ? 'Les afgerond' : step.text}</h1>
-            <p>{completed ? 'Je voortgang is opgeslagen. Kies een volgende les in het menu.' : `Speel: ${currentKeys}`}</p>
-          </div>
         </section>
 
-        <aside className={`practice-feedback ${feedback.tone}`}>
-          <span>Feedback</span>
-          <strong>{feedback.message}</strong>
+        <aside className={`premium-coach ${feedback.tone}`}>
+          <span>{feedbackLabel}</span>
+          <strong>{featuredKey.replace('#', '♯')}</strong>
+          <p>{feedback.message}</p>
+          <div className="premium-feedback-meter">
+            <i />
+            <span>{detectedNote ? `Live: ${detectedNote.replace('#', '♯')}` : 'Nog geen noot gehoord'}</span>
+          </div>
           <dl>
             <div>
               <dt>Verwacht</dt>
-              <dd>{step.expectedNote?.replace('#', '♯') ?? currentKeys}</dd>
+              <dd>{featuredKey.replace('#', '♯')}</dd>
             </div>
             <div>
-              <dt>Live</dt>
-              <dd>{detectedNote ? detectedNote.replace('#', '♯') : '...'}</dd>
+              <dt>Akkoord</dt>
+              <dd>{currentKeys}</dd>
             </div>
           </dl>
         </aside>
       </div>
 
-      <div className="practice-controls">
-        <button className="secondary-button" disabled={!canGoBack} onClick={onPreviousStep} type="button">
+      <div className="premium-practice-controls">
+        <button disabled={!canGoBack} onClick={onPreviousStep} type="button">
           <ArrowLeft aria-hidden="true" />
           Vorige
         </button>
-        <button className="secondary-button" onClick={onRestart} type="button">
+        <button onClick={onRestart} type="button">
           <RotateCcw aria-hidden="true" />
           Opnieuw
         </button>
-        <button className="primary-button" onClick={onNextStep} type="button">
+        <button onClick={onNextStep} type="button">
           {completed ? <Check aria-hidden="true" /> : <ArrowRight aria-hidden="true" />}
           {completed ? 'Klaar' : 'Volgende'}
         </button>
       </div>
 
-      <PianoKeyboard detectedKey={detectedNote} expectedKey={step.expectedNote} lessonKeys={step.keys} />
+      <PremiumKeyboard detectedKey={detectedNote} expectedKey={step.expectedNote} lessonKeys={step.keys} />
     </section>
   );
 };
