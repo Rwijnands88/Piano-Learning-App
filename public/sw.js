@@ -1,4 +1,4 @@
-const CACHE_NAME = 'piano-studio-v2';
+const CACHE_NAME = 'piano-studio-v3';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
