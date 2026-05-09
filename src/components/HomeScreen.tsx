@@ -9,6 +9,7 @@ type HomeScreenProps = {
   userEmail?: string | null;
   onSelectLesson: (lessonId: string) => void;
   onStartPractice: () => void;
+  onPreparePractice: () => void;
   onLogOut: () => void;
 };
 
@@ -20,6 +21,7 @@ export const HomeScreen = ({
   userEmail,
   onSelectLesson,
   onStartPractice,
+  onPreparePractice,
   onLogOut,
 }: HomeScreenProps) => {
   const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId) ?? lessons[0];
@@ -43,7 +45,9 @@ export const HomeScreen = ({
 
         <nav aria-label="Hoofdmenu">
           <button className="active" type="button">Menu</button>
-          <button onClick={onStartPractice} type="button">Oefenen</button>
+          <button onClick={onStartPractice} onFocus={onPreparePractice} onPointerEnter={onPreparePractice} type="button">
+            Oefenen
+          </button>
         </nav>
 
         <div className="premium-user">
@@ -61,14 +65,26 @@ export const HomeScreen = ({
             <span className="premium-kicker">{source === 'firestore' ? 'Firestore lessen' : 'Lokale lessen'}</span>
             <h1>{selectedLesson?.title ?? 'Kies je les'}</h1>
             <p>{selectedLesson?.description ?? 'Start een rustige oefensessie naast je piano.'}</p>
-            <button className="premium-primary" onClick={onStartPractice} type="button">
+            <button
+              className="premium-primary"
+              onClick={onStartPractice}
+              onFocus={onPreparePractice}
+              onPointerEnter={onPreparePractice}
+              type="button"
+            >
               <Play aria-hidden="true" />
               Start oefening
             </button>
           </section>
 
           <div className="premium-menu-rail" aria-label="Hoofdacties">
-            <button className="premium-menu-action active" onClick={onStartPractice} type="button">
+            <button
+              className="premium-menu-action active"
+              onClick={onStartPractice}
+              onFocus={onPreparePractice}
+              onPointerEnter={onPreparePractice}
+              type="button"
+            >
               <Play aria-hidden="true" />
               <span>
                 <strong>Oefenen</strong>

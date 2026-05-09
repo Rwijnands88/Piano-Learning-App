@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, Check, ChevronLeft, Hand, Mic, RotateCcw } from 'lucide-react';
 import { prettyKeys } from '../data/piano';
 import { PremiumKeyboard } from './PremiumKeyboard';
+import { ScoreRenderer } from './ScoreRenderer';
 import type { FeedbackState, LearningMode, Lesson, LessonStep, PianoKeyName } from '../types';
 
 type PracticeScreenProps = {
@@ -15,6 +16,7 @@ type PracticeScreenProps = {
   canGoBack: boolean;
   onModeChange: (mode: LearningMode) => void;
   onBackHome: () => void;
+  onKeyPress: (note: PianoKeyName) => void;
   onPreviousStep: () => void;
   onNextStep: () => void;
   onRestart: () => void;
@@ -32,6 +34,7 @@ export const PracticeScreen = ({
   canGoBack,
   onModeChange,
   onBackHome,
+  onKeyPress,
   onPreviousStep,
   onNextStep,
   onRestart,
@@ -85,25 +88,12 @@ export const PracticeScreen = ({
 
       <div className="premium-practice-stage">
         <section className="premium-score" aria-label="Lesstap">
-          <div className="premium-clef" aria-hidden="true">𝄞</div>
-          <div className="premium-playline" aria-hidden="true" />
-          <div className="premium-barline one" aria-hidden="true" />
-          <div className="premium-barline two" aria-hidden="true" />
           <div className="premium-score-copy">
             <span>Stap {stepIndex + 1}/{lesson.steps.length}</span>
             <h1>{completed ? 'Les afgerond' : step.text}</h1>
             <p>{completed ? 'Je voortgang is opgeslagen. Kies straks de volgende les in het menu.' : `Speel: ${currentKeys}`}</p>
           </div>
-          <div className="premium-staff" aria-hidden="true">
-            {Array.from({ length: 5 }, (_, index) => (
-              <span className="premium-staff-line" key={index} style={{ top: `${30 + index * 9}%` }} />
-            ))}
-            {step.keys.map((key, index) => (
-              <span className={`premium-note n-${index}`} key={key}>
-                {key.replace('#', '♯')}
-              </span>
-            ))}
-          </div>
+          <ScoreRenderer feedbackTone={feedback.tone} stepIndex={stepIndex} steps={lesson.steps} />
         </section>
 
         <aside className={`premium-coach ${feedback.tone}`}>
@@ -112,7 +102,13 @@ export const PracticeScreen = ({
           <p>{feedback.message}</p>
           <div className="premium-feedback-meter">
             <i />
-            <span>{detectedNote ? `Live: ${detectedNote.replace('#', '♯')}` : 'Nog geen noot gehoord'}</span>
+            <span>
+              {detectedNote
+                ? `${mode === 'manual' ? 'Tik' : 'Live'}: ${detectedNote.replace('#', '♯')}`
+                : mode === 'manual'
+                  ? 'Tik een toets op het scherm'
+                  : 'Nog geen noot gehoord'}
+            </span>
           </div>
           <dl>
             <div>
@@ -142,7 +138,13 @@ export const PracticeScreen = ({
         </button>
       </div>
 
-      <PremiumKeyboard detectedKey={detectedNote} expectedKey={step.expectedNote} lessonKeys={step.keys} />
+      <PremiumKeyboard
+        detectedKey={detectedNote}
+        disabled={completed || mode !== 'manual'}
+        expectedKey={step.expectedNote}
+        lessonKeys={step.keys}
+        onKeyPress={onKeyPress}
+      />
     </section>
   );
 };

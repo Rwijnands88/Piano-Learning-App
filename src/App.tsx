@@ -8,7 +8,8 @@ import { useLessons } from './hooks/useLessons';
 import { usePitchDetection } from './hooks/usePitchDetection';
 import { useProgress } from './hooks/useProgress';
 import { hasFirebaseConfig } from './lib/firebase';
-import type { FeedbackState, LearningMode } from './types';
+import { preloadVexFlow } from './lib/vexflowLoader';
+import type { FeedbackState, LearningMode, PianoKeyName } from './types';
 
 const initialFeedback: FeedbackState = {
   tone: 'idle',
@@ -24,6 +25,7 @@ const LearningApp = () => {
   const [screen, setScreen] = useState<'home' | 'practice'>('home');
   const [mode, setMode] = useState<LearningMode>('listen');
   const [feedback, setFeedback] = useState<FeedbackState>(initialFeedback);
+  const [manualDetectedNote, setManualDetectedNote] = useState<PianoKeyName | null>(null);
   const [completedSessionLessons, setCompletedSessionLessons] = useState<Set<string>>(new Set());
   const lastAcceptedNoteRef = useRef<string>('');
   const autoAdvanceTimerRef = useRef<number | null>(null);
@@ -47,13 +49,22 @@ const LearningApp = () => {
   );
 
   const pitch = usePitchDetection(mode, Boolean(auth.user && currentStep && !lessonCompleted && screen === 'practice'));
+  const displayedDetectedNote = mode === 'manual' ? manualDetectedNote : pitch.detectedNote;
 
   const changeMode = (nextMode: LearningMode) => {
     if (nextMode === 'listen') {
       pitch.resetError();
+      setManualDetectedNote(null);
+    } else {
+      setFeedback({ tone: 'idle', message: 'Handmatige modus is actief. Tik de gemarkeerde toets op het scherm.' });
     }
 
     setMode(nextMode);
+  };
+
+  const startPractice = () => {
+    preloadVexFlow();
+    setScreen('practice');
   };
 
   useEffect(() => {
@@ -123,6 +134,7 @@ const LearningApp = () => {
     }
 
     lastAcceptedNoteRef.current = '';
+    setManualDetectedNote(null);
     if (autoAdvanceTimerRef.current !== null) {
       window.clearTimeout(autoAdvanceTimerRef.current);
       autoAdvanceTimerRef.current = null;
@@ -135,12 +147,16 @@ const LearningApp = () => {
     }
 
     setStepIndex((index) => index + 1);
+    if (mode === 'manual') {
+      setFeedback({ tone: 'idle', message: 'Tik de gemarkeerde toets op het scherm.' });
+    }
   };
 
   const selectLesson = (lessonId: string) => {
     setSelectedLessonId(lessonId);
     setStepIndex(0);
     lastAcceptedNoteRef.current = '';
+    setManualDetectedNote(null);
     setFeedback(initialFeedback);
     setCompletedSessionLessons((items) => {
       const next = new Set(items);
@@ -152,6 +168,7 @@ const LearningApp = () => {
   const restartLesson = () => {
     setStepIndex(0);
     lastAcceptedNoteRef.current = '';
+    setManualDetectedNote(null);
     setFeedback({ tone: 'idle', message: 'Les opnieuw gestart.' });
     if (selectedLesson) {
       setCompletedSessionLessons((items) => {
@@ -160,6 +177,32 @@ const LearningApp = () => {
         return next;
       });
     }
+  };
+
+  const handleManualKeyPress = (note: PianoKeyName) => {
+    if (!currentStep || mode !== 'manual' || lessonCompleted || screen !== 'practice') {
+      return;
+    }
+
+    const expected = currentStep.expectedNote ?? currentStep.keys[0];
+    setManualDetectedNote(note);
+
+    if (note === expected) {
+      if (autoAdvanceTimerRef.current !== null) {
+        window.clearTimeout(autoAdvanceTimerRef.current);
+      }
+
+      setFeedback({ tone: 'success', message: `${note.replace('#', '♯')} klopt. Door naar de volgende stap.` });
+      autoAdvanceTimerRef.current = window.setTimeout(() => {
+        goNext();
+      }, 450);
+      return;
+    }
+
+    setFeedback({
+      tone: 'error',
+      message: `${note.replace('#', '♯')} gekozen. Probeer ${expected.replace('#', '♯')}.`,
+    });
   };
 
   if (auth.loading) {
@@ -208,8 +251,9 @@ const LearningApp = () => {
           completedLessonIds={displayedCompletedLessonIds}
           lessons={lessons}
           onLogOut={auth.logOut}
+          onPreparePractice={preloadVexFlow}
           onSelectLesson={selectLesson}
-          onStartPractice={() => setScreen('practice')}
+          onStartPractice={startPractice}
           selectedLessonId={selectedLesson.id}
           source={source}
           userEmail={auth.user.email}
@@ -218,16 +262,18 @@ const LearningApp = () => {
         <PracticeScreen
           canGoBack={stepIndex > 0}
           completed={lessonCompleted}
-          detectedNote={pitch.detectedNote}
+          detectedNote={displayedDetectedNote}
           feedback={feedback}
           isListening={pitch.isListening}
           lesson={selectedLesson}
           mode={mode}
           onBackHome={() => setScreen('home')}
+          onKeyPress={handleManualKeyPress}
           onModeChange={changeMode}
           onNextStep={goNext}
           onPreviousStep={() => {
             lastAcceptedNoteRef.current = '';
+            setManualDetectedNote(null);
             setStepIndex((index) => Math.max(0, index - 1));
           }}
           onRestart={restartLesson}

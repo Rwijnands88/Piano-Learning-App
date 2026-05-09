@@ -5,6 +5,8 @@ type PremiumKeyboardProps = {
   lessonKeys: PianoKeyName[];
   detectedKey: PianoKeyName | null;
   expectedKey?: PianoKeyName;
+  disabled?: boolean;
+  onKeyPress?: (note: PianoKeyName) => void;
 };
 
 const blackOffsets: Record<string, number> = {
@@ -15,8 +17,9 @@ const blackOffsets: Record<string, number> = {
   'A#': 5.72,
 };
 
-export const PremiumKeyboard = ({ lessonKeys, detectedKey, expectedKey }: PremiumKeyboardProps) => {
+export const PremiumKeyboard = ({ lessonKeys, detectedKey, expectedKey, disabled = false, onKeyPress }: PremiumKeyboardProps) => {
   const lessonSet = new Set(lessonKeys);
+  const canPlay = Boolean(onKeyPress) && !disabled;
 
   return (
     <div className="premium-keys" aria-label="Piano toetsenbord">
@@ -31,13 +34,20 @@ export const PremiumKeyboard = ({ lessonKeys, detectedKey, expectedKey }: Premiu
             .join(' ');
 
           return (
-            <span className={classes} key={key.note}>
+            <button
+              aria-label={`Speel ${key.label}`}
+              className={classes}
+              disabled={!canPlay}
+              key={key.note}
+              onClick={() => onKeyPress?.(key.note)}
+              type="button"
+            >
               <b>{lessonSet.has(key.note) || detectedKey === key.note ? key.label : ''}</b>
-            </span>
+            </button>
           );
         })}
       </div>
-      <div className="premium-black-row" aria-hidden="true">
+      <div className="premium-black-row">
         {pianoKeys
           .filter((key) => key.accidental)
           .map((key) => {
@@ -54,9 +64,17 @@ export const PremiumKeyboard = ({ lessonKeys, detectedKey, expectedKey }: Premiu
               .join(' ');
 
             return (
-              <i className={classes} key={key.note} style={{ left }}>
+              <button
+                aria-label={`Speel ${key.label}`}
+                className={classes}
+                disabled={!canPlay}
+                key={key.note}
+                onClick={() => onKeyPress?.(key.note)}
+                style={{ left }}
+                type="button"
+              >
                 <b>{lessonSet.has(key.note) || detectedKey === key.note ? key.label : ''}</b>
-              </i>
+              </button>
             );
           })}
       </div>
