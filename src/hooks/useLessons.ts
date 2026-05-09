@@ -8,7 +8,7 @@ import type { FingerNumber, Lesson, LessonStep, NoteDuration, PianoHand, PianoKe
 type LessonsState = {
   lessons: Lesson[];
   loading: boolean;
-  source: 'firestore' | 'bundled';
+  source: 'firestore' | 'bundled' | 'mixed';
   error: string;
 };
 
@@ -99,6 +99,17 @@ const normalizeLesson = (id: string, data: Record<string, unknown>): Lesson => {
   };
 };
 
+const mergeWithBundledLessons = (firestoreLessons: Lesson[]) => {
+  const remoteById = new Map(firestoreLessons.map((lesson) => [lesson.id, lesson]));
+  const bundledIds = new Set(defaultLessons.map((lesson) => lesson.id));
+  const bundledWithOverrides = defaultLessons.map((lesson) => remoteById.get(lesson.id) ?? lesson);
+  const customFirestoreLessons = firestoreLessons
+    .filter((lesson) => !bundledIds.has(lesson.id))
+    .sort((a, b) => a.order - b.order);
+
+  return [...bundledWithOverrides, ...customFirestoreLessons];
+};
+
 export const useLessons = (enabled: boolean): LessonsState => {
   const [state, setState] = useState<LessonsState>({
     lessons: defaultLessons,
@@ -124,13 +135,15 @@ export const useLessons = (enabled: boolean): LessonsState => {
           return;
         }
 
-        const lessons = snapshot.docs
+        const firestoreLessons = snapshot.docs
           .map((doc) => normalizeLesson(doc.id, doc.data()))
           .filter((lesson) => lesson.steps.length > 0);
+        const lessons = mergeWithBundledLessons(firestoreLessons);
+
         setState({
-          lessons: lessons.length > 0 ? lessons : defaultLessons,
+          lessons,
           loading: false,
-          source: lessons.length > 0 ? 'firestore' : 'bundled',
+          source: firestoreLessons.length > 0 ? 'mixed' : 'bundled',
           error: '',
         });
       } catch (caught) {

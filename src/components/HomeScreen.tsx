@@ -5,7 +5,7 @@ type HomeScreenProps = {
   lessons: Lesson[];
   selectedLessonId: string;
   completedLessonIds: Set<string>;
-  source: 'firestore' | 'bundled';
+  source: 'firestore' | 'bundled' | 'mixed';
   userEmail?: string | null;
   onSelectLesson: (lessonId: string) => void;
   onStartPractice: () => void;
@@ -27,6 +27,7 @@ export const HomeScreen = ({
   const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId) ?? lessons[0];
   const completedCount = lessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
   const visibleLessons = lessons.slice(0, 3);
+  const sourceLabel = source === 'mixed' ? 'Kernlessen + Firestore' : source === 'firestore' ? 'Firestore lessen' : 'Lokale lessen';
   const modules = lessons.reduce<Record<string, Lesson[]>>((groups, lesson) => {
     groups[lesson.module] = [...(groups[lesson.module] ?? []), lesson];
     return groups;
@@ -62,7 +63,7 @@ export const HomeScreen = ({
       <div className="premium-glass">
         <div className="premium-home-screen">
           <section className="premium-hero-panel">
-            <span className="premium-kicker">{source === 'firestore' ? 'Firestore lessen' : 'Lokale lessen'}</span>
+            <span className="premium-kicker">{sourceLabel}</span>
             <h1>{selectedLesson?.title ?? 'Kies je les'}</h1>
             <p>{selectedLesson?.description ?? 'Start een rustige oefensessie naast je piano.'}</p>
             <button
