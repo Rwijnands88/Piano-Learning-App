@@ -12,6 +12,7 @@ type PitchState = {
   error: string;
   start: () => Promise<void>;
   stop: () => void;
+  resetError: () => void;
 };
 
 export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchState => {
@@ -21,6 +22,11 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
   const [isListening, setIsListening] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [error, setError] = useState('');
+
+  const resetError = useCallback(() => {
+    setPermissionDenied(false);
+    setError('');
+  }, []);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -60,6 +66,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
     }
 
     try {
+      resetError();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
@@ -112,7 +119,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
       );
       stop();
     }
-  }, [enabled, isListening, mode, stop]);
+  }, [enabled, isListening, mode, resetError, stop]);
 
   useEffect(() => {
     if (mode === 'listen' && enabled) {
@@ -124,5 +131,5 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean): PitchSt
     return () => stop();
   }, [enabled, mode, start, stop]);
 
-  return { detectedNote, clarity, frequency, isListening, permissionDenied, error, start, stop };
+  return { detectedNote, clarity, frequency, isListening, permissionDenied, error, start, stop, resetError };
 };

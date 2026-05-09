@@ -19,7 +19,7 @@ const initialFeedback: FeedbackState = {
 
 export const App = () => {
   const auth = useAuth();
-  const { lessons, source, error: lessonError } = useLessons();
+  const { lessons, source, error: lessonError } = useLessons(Boolean(auth.user));
   const progress = useProgress(auth.user?.uid);
   const [selectedLessonId, setSelectedLessonId] = useState('');
   const [stepIndex, setStepIndex] = useState(0);
@@ -48,6 +48,14 @@ export const App = () => {
   );
 
   const pitch = usePitchDetection(mode, Boolean(auth.user && currentStep && !lessonCompleted));
+
+  const changeMode = (nextMode: LearningMode) => {
+    if (nextMode === 'listen') {
+      pitch.resetError();
+    }
+
+    setMode(nextMode);
+  };
 
   useEffect(() => {
     if (pitch.permissionDenied) {
@@ -183,7 +191,7 @@ export const App = () => {
         </div>
 
         <div className="top-actions">
-          <ModeToggle isListening={pitch.isListening} mode={mode} onChange={setMode} />
+          <ModeToggle isListening={pitch.isListening} mode={mode} onChange={changeMode} />
           <button className="secondary-button compact" onClick={auth.logOut} type="button">
             <LogOut aria-hidden="true" />
             Uitloggen

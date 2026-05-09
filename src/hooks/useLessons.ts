@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FirebaseError } from 'firebase/app';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { defaultLessons } from '../data/defaultLessons';
 import { db } from '../lib/firebase';
@@ -29,10 +30,10 @@ const normalizeLesson = (id: string, data: Record<string, unknown>): Lesson => (
     : [],
 });
 
-export const useLessons = (): LessonsState => {
+export const useLessons = (enabled: boolean): LessonsState => {
   const [state, setState] = useState<LessonsState>({
     lessons: defaultLessons,
-    loading: Boolean(db),
+    loading: Boolean(db && enabled),
     source: 'bundled',
     error: '',
   });
@@ -40,7 +41,7 @@ export const useLessons = (): LessonsState => {
   useEffect(() => {
     const firestore = db;
 
-    if (!firestore) {
+    if (!firestore || !enabled) {
       setState({ lessons: defaultLessons, loading: false, source: 'bundled', error: '' });
       return;
     }
@@ -54,20 +55,29 @@ export const useLessons = (): LessonsState => {
           return;
         }
 
-        const lessons = snapshot.docs.map((doc) => normalizeLesson(doc.id, doc.data()));
+        const lessons = snapshot.docs
+          .map((doc) => normalizeLesson(doc.id, doc.data()))
+          .filter((lesson) => lesson.steps.length > 0);
         setState({
           lessons: lessons.length > 0 ? lessons : defaultLessons,
           loading: false,
           source: lessons.length > 0 ? 'firestore' : 'bundled',
           error: '',
         });
-      } catch {
+      } catch (caught) {
         if (!cancelled) {
+          const details =
+            caught instanceof FirebaseError
+              ? `${caught.code}: ${caught.message}`
+              : caught instanceof Error
+                ? caught.message
+                : 'Onbekende Firebase-fout';
+
           setState({
             lessons: defaultLessons,
             loading: false,
             source: 'bundled',
-            error: 'Firestore-lessen konden niet geladen worden; lokale lessen zijn actief.',
+            error: `Firestore-lessen konden niet geladen worden; lokale lessen zijn actief. (${details})`,
           });
         }
       }
@@ -78,7 +88,7 @@ export const useLessons = (): LessonsState => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   return state;
 };
