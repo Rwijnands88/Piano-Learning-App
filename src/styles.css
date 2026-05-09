@@ -1997,6 +1997,70 @@ p {
   gap: 12px;
 }
 
+.premium-home-panel {
+  grid-area: lessons;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid rgba(255, 238, 203, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 250, 238, 0.1), rgba(255, 250, 238, 0.03)),
+    rgba(8, 7, 6, 0.22);
+  padding: 10px;
+}
+
+.premium-home-panel .premium-lesson-strip {
+  grid-area: auto;
+  min-height: 100%;
+}
+
+.premium-panel-list {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+
+.premium-home-panel .home-menu-section {
+  padding: 6px;
+}
+
+.premium-info-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-height: 100%;
+}
+
+.premium-info-panel > div {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  min-height: 118px;
+  border: 1px solid rgba(255, 238, 203, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 248, 236, 0.07);
+  padding: 16px;
+}
+
+.premium-info-panel small {
+  color: rgba(255, 248, 236, 0.58);
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.premium-info-panel strong {
+  color: #fff7e9;
+  font-size: clamp(1.15rem, 2.4vw, 2rem);
+  line-height: 1.05;
+}
+
+.premium-info-panel span {
+  color: rgba(255, 248, 236, 0.68);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .premium-lesson {
   grid-template-columns: auto minmax(0, 1fr);
   align-content: center;
@@ -2521,6 +2585,10 @@ p {
   padding: 0;
 }
 
+.premium-home-live {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .premium-practice-live {
   grid-template-rows: auto 5px minmax(0, 1fr) auto minmax(122px, 22vh);
 }
@@ -2829,16 +2897,104 @@ p {
     padding: 0;
   }
 
+  .premium-home-live {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .premium-home-screen {
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 0.46fr);
+    grid-template-rows: minmax(0, 1fr) minmax(108px, 0.38fr);
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .premium-hero-panel {
+    align-content: center;
+    padding: 14px;
+  }
+
+  .premium-hero-panel h1 {
+    max-width: 16ch;
+    margin: 6px 0 8px;
+    font-size: clamp(1.55rem, 4.1vw, 3.1rem);
+    line-height: 0.98;
+  }
+
+  .premium-hero-panel p {
+    max-width: 44ch;
+    margin: 0 0 10px;
+    font-size: 0.88rem;
+    line-height: 1.32;
+  }
+
+  .premium-primary {
+    min-width: 164px;
+    min-height: 44px;
+    gap: 8px;
+    font-size: 0.92rem;
+  }
+
+  .premium-primary svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .premium-menu-rail {
+    gap: 8px;
+  }
+
+  .premium-menu-action {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+    min-height: 58px;
+    border-radius: 14px;
+    padding: 8px;
+  }
+
+  .premium-menu-action > svg,
+  .premium-menu-action .premium-dual-icons {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .premium-menu-action strong {
+    font-size: 0.95rem;
+  }
+
+  .premium-menu-action small,
+  .premium-lesson small {
+    font-size: 0.72rem;
+  }
+
+  .premium-home-panel {
+    border-radius: 14px;
+    padding: 8px;
+  }
+
+  .premium-lesson-strip {
+    gap: 8px;
+  }
+
+  .premium-lesson {
+    min-height: 82px;
+    border-radius: 14px;
+    padding: 10px;
+  }
+
+  .premium-lesson span {
+    width: 34px;
+    height: 34px;
+  }
+
   .premium-practice-live {
-    grid-template-rows: auto 4px minmax(0, 1fr) minmax(104px, 25vh);
+    grid-template-rows: auto 4px minmax(0, 1fr) auto minmax(104px, 23vh);
   }
 
   .premium-practice-live .premium-practice-controls {
-    display: none;
-  }
-
-  .premium-module-list {
-    display: none;
+    display: inline-flex;
+    padding: 4px;
   }
 
   .premium-practice-stage {
@@ -2906,9 +3062,20 @@ p {
   .premium-feedback-meter span {
     font-size: 0.72rem;
   }
+
+  .premium-info-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (orientation: landscape) and (max-width: 760px) {
+  .premium-home-screen {
+    grid-template-columns: minmax(0, 1fr) minmax(136px, 0.4fr);
+    grid-template-rows: minmax(0, 1fr) minmax(84px, 0.34fr);
+    gap: 6px;
+    padding: 8px;
+  }
+
   .premium-brand {
     min-height: 46px;
     padding: 6px 12px 6px 6px;
@@ -2924,19 +3091,72 @@ p {
   }
 
   .premium-hero-panel {
-    padding: 16px;
+    padding: 12px;
   }
 
   .premium-hero-panel h1 {
     margin: 6px 0;
-    font-size: clamp(1.42rem, 5vw, 2rem);
+    font-size: clamp(1.28rem, 4.4vw, 1.8rem);
+    line-height: 1;
   }
 
   .premium-hero-panel p {
-    font-size: 0.82rem;
+    max-width: 34ch;
+    font-size: 0.76rem;
+    line-height: 1.25;
+  }
+
+  .premium-primary {
+    min-width: 138px;
+    min-height: 38px;
+    font-size: 0.8rem;
+  }
+
+  .premium-menu-rail {
+    gap: 6px;
   }
 
   .premium-menu-action:nth-child(n + 3) {
+    min-height: 54px;
+  }
+
+  .premium-menu-action:nth-child(n + 3) small {
+    display: none;
+  }
+
+  .premium-menu-action {
+    grid-template-columns: 34px minmax(0, 1fr);
+    min-height: 46px;
+    padding: 6px;
+  }
+
+  .premium-menu-action > svg,
+  .premium-menu-action .premium-dual-icons {
+    width: 34px;
+    height: 34px;
+    padding: 8px;
+  }
+
+  .premium-menu-action strong {
+    font-size: 0.78rem;
+  }
+
+  .premium-home-panel {
+    padding: 6px;
+  }
+
+  .premium-lesson-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .premium-lesson {
+    grid-template-columns: 1fr;
+    min-height: 70px;
+    padding: 8px;
+  }
+
+  .premium-lesson span {
     display: none;
   }
 
@@ -2975,5 +3195,20 @@ p {
     position: absolute;
     right: 5px;
     top: 5px;
+  }
+
+  .premium-info-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .premium-info-panel > div {
+    min-height: 88px;
+    padding: 12px;
+  }
+
+  .premium-practice-controls button {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 0.82rem;
   }
 }

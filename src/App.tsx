@@ -41,6 +41,10 @@ const LearningApp = () => {
     () => lessons.find((lesson) => lesson.id === selectedLessonId) ?? lessons[0],
     [lessons, selectedLessonId],
   );
+  const selectedLessonIndex = useMemo(
+    () => lessons.findIndex((lesson) => lesson.id === selectedLesson?.id),
+    [lessons, selectedLesson?.id],
+  );
 
   const currentStep = selectedLesson?.steps[Math.min(stepIndex, Math.max(selectedLesson.steps.length - 1, 0))];
   const expectedStepNote = currentStep?.expectedNote ?? currentStep?.keys[0];
@@ -65,6 +69,18 @@ const LearningApp = () => {
   };
 
   const startPractice = () => {
+    if (selectedLesson) {
+      setCompletedSessionLessons((items) => {
+        const next = new Set(items);
+        next.delete(selectedLesson.id);
+        return next;
+      });
+    }
+
+    setStepIndex(0);
+    lastAcceptedNoteRef.current = '';
+    setManualDetectedNote(null);
+    setFeedback(initialFeedback);
     preloadVexFlow();
     setScreen('practice');
   };
@@ -125,13 +141,17 @@ const LearningApp = () => {
     };
   }, []);
 
-  const completeLesson = async () => {
-    if (!selectedLesson) {
-      return;
-    }
+  const markLessonCompleted = (lessonId: string) => {
+    setCompletedSessionLessons((items) => new Set(items).add(lessonId));
+    void progress.markCompleted(lessonId);
+  };
 
-    setCompletedSessionLessons((items) => new Set(items).add(selectedLesson.id));
-    await progress.markCompleted(selectedLesson.id);
+  const openLesson = (lessonId: string, nextFeedback = initialFeedback) => {
+    setSelectedLessonId(lessonId);
+    setStepIndex(0);
+    lastAcceptedNoteRef.current = '';
+    setManualDetectedNote(null);
+    setFeedback(nextFeedback);
   };
 
   const goNext = () => {
@@ -146,9 +166,32 @@ const LearningApp = () => {
       autoAdvanceTimerRef.current = null;
     }
 
+    if (lessonCompleted) {
+      const nextLesson = lessons[selectedLessonIndex + 1];
+      if (nextLesson) {
+        openLesson(nextLesson.id, {
+          tone: 'idle',
+          message: `Volgende les staat klaar: ${nextLesson.title}.`,
+        });
+      } else {
+        setScreen('home');
+        setFeedback(initialFeedback);
+      }
+      return;
+    }
+
     if (stepIndex >= selectedLesson.steps.length - 1) {
-      void completeLesson();
-      setFeedback({ tone: 'success', message: 'Les afgerond. Kies de volgende les in de leerlijn.' });
+      markLessonCompleted(selectedLesson.id);
+      const nextLesson = lessons[selectedLessonIndex + 1];
+
+      if (nextLesson) {
+        openLesson(nextLesson.id, {
+          tone: 'success',
+          message: `Les afgerond. Door naar: ${nextLesson.title}.`,
+        });
+      } else {
+        setFeedback({ tone: 'success', message: 'Leerlijn afgerond. Mooi werk.' });
+      }
       return;
     }
 
@@ -159,11 +202,7 @@ const LearningApp = () => {
   };
 
   const selectLesson = (lessonId: string) => {
-    setSelectedLessonId(lessonId);
-    setStepIndex(0);
-    lastAcceptedNoteRef.current = '';
-    setManualDetectedNote(null);
-    setFeedback(initialFeedback);
+    openLesson(lessonId);
     setCompletedSessionLessons((items) => {
       const next = new Set(items);
       next.delete(lessonId);
