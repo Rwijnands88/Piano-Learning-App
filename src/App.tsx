@@ -1,10 +1,9 @@
-import { LogOut, WifiOff } from 'lucide-react';
+import { Piano, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AuthScreen } from './components/AuthScreen';
-import { LessonList } from './components/LessonList';
-import { LessonStage } from './components/LessonStage';
-import { ModeToggle } from './components/ModeToggle';
-import { PianoKeyboard } from './components/PianoKeyboard';
+import { HomeScreen } from './components/HomeScreen';
+import { PracticeScreen } from './components/PracticeScreen';
+import { UiDemos } from './components/UiDemos';
 import { useAuth } from './hooks/useAuth';
 import { useLessons } from './hooks/useLessons';
 import { usePitchDetection } from './hooks/usePitchDetection';
@@ -17,12 +16,13 @@ const initialFeedback: FeedbackState = {
   message: 'Kies een les en speel de gemarkeerde toets of ga handmatig verder.',
 };
 
-export const App = () => {
+const LearningApp = () => {
   const auth = useAuth();
   const { lessons, source, error: lessonError } = useLessons(Boolean(auth.user));
   const progress = useProgress(auth.user?.uid);
   const [selectedLessonId, setSelectedLessonId] = useState('');
   const [stepIndex, setStepIndex] = useState(0);
+  const [screen, setScreen] = useState<'home' | 'practice'>('home');
   const [mode, setMode] = useState<LearningMode>('listen');
   const [feedback, setFeedback] = useState<FeedbackState>(initialFeedback);
   const [completedSessionLessons, setCompletedSessionLessons] = useState<Set<string>>(new Set());
@@ -47,7 +47,7 @@ export const App = () => {
     [completedSessionLessons, progress.completedLessonIds],
   );
 
-  const pitch = usePitchDetection(mode, Boolean(auth.user && currentStep && !lessonCompleted));
+  const pitch = usePitchDetection(mode, Boolean(auth.user && currentStep && !lessonCompleted && screen === 'practice'));
 
   const changeMode = (nextMode: LearningMode) => {
     if (nextMode === 'listen') {
@@ -58,14 +58,14 @@ export const App = () => {
   };
 
   useEffect(() => {
-    if (pitch.permissionDenied) {
+    if (screen === 'practice' && pitch.permissionDenied) {
       setMode('manual');
       setFeedback({ tone: 'warning', message: pitch.error || 'Microfoon geweigerd. Handmatige modus is actief.' });
     }
-  }, [pitch.error, pitch.permissionDenied]);
+  }, [pitch.error, pitch.permissionDenied, screen]);
 
   useEffect(() => {
-    if (!currentStep || mode !== 'listen' || lessonCompleted) {
+    if (!currentStep || mode !== 'listen' || lessonCompleted || screen !== 'practice') {
       return;
     }
 
@@ -73,10 +73,10 @@ export const App = () => {
       tone: pitch.isListening ? 'listening' : 'idle',
       message: pitch.isListening ? 'Luistermodus is actief. Speel de gemarkeerde toets.' : 'Microfoon wordt gestart...',
     });
-  }, [currentStep, lessonCompleted, mode, pitch.isListening, selectedLessonId, stepIndex]);
+  }, [currentStep, lessonCompleted, mode, pitch.isListening, screen, selectedLessonId, stepIndex]);
 
   useEffect(() => {
-    if (!currentStep || mode !== 'listen' || !pitch.detectedNote || lessonCompleted) {
+    if (!currentStep || mode !== 'listen' || !pitch.detectedNote || lessonCompleted || screen !== 'practice') {
       return;
     }
 
@@ -99,7 +99,7 @@ export const App = () => {
         message: `${pitch.detectedNote.replace('#', '♯')} gehoord. Probeer ${expected.replace('#', '♯')}.`,
       });
     }
-  }, [currentStep, lessonCompleted, mode, pitch.detectedNote, selectedLesson?.id, stepIndex]);
+  }, [currentStep, lessonCompleted, mode, pitch.detectedNote, screen, selectedLesson?.id, stepIndex]);
 
   useEffect(() => {
     return () => {
@@ -184,20 +184,11 @@ export const App = () => {
 
   return (
     <main className="app-shell">
-      <header className="top-bar">
-        <div>
-          <p className="eyebrow">Piano Studio</p>
-          <h1>Oefenen naast je piano</h1>
-        </div>
-
-        <div className="top-actions">
-          <ModeToggle isListening={pitch.isListening} mode={mode} onChange={changeMode} />
-          <button className="secondary-button compact" onClick={auth.logOut} type="button">
-            <LogOut aria-hidden="true" />
-            Uitloggen
-          </button>
-        </div>
-      </header>
+      <div className="portrait-gate">
+        <Piano aria-hidden="true" />
+        <strong>Draai je tablet naar landscape</strong>
+        <span>De lesruimte en het toetsenbord zijn ontworpen voor horizontaal gebruik naast je piano.</span>
+      </div>
 
       {!hasFirebaseConfig ? (
         <div className="system-note warning">
@@ -213,39 +204,40 @@ export const App = () => {
         </div>
       ) : null}
 
-      <div className="workspace">
-        <LessonList
+      {screen === 'home' ? (
+        <HomeScreen
           completedLessonIds={displayedCompletedLessonIds}
           lessons={lessons}
-          onSelect={selectLesson}
+          onLogOut={auth.logOut}
+          onSelectLesson={selectLesson}
+          onStartPractice={() => setScreen('practice')}
           selectedLessonId={selectedLesson.id}
+          source={source}
+          userEmail={auth.user.email}
         />
-
-        <div className="practice-column">
-          <div className="source-pill">{source === 'firestore' ? 'Firestore lessen' : 'Lokale lessen'}</div>
-          <LessonStage
-            canGoBack={stepIndex > 0}
-            completed={lessonCompleted}
-            detectedNote={pitch.detectedNote}
-            feedback={feedback}
-            lesson={selectedLesson}
-            onBack={() => {
-              lastAcceptedNoteRef.current = '';
-              setStepIndex((index) => Math.max(0, index - 1));
-            }}
-            onNext={goNext}
-            onRestart={restartLesson}
-            step={currentStep}
-            stepIndex={stepIndex}
-          />
-        </div>
-      </div>
-
-      <PianoKeyboard
-        detectedKey={pitch.detectedNote}
-        expectedKey={currentStep.expectedNote}
-        lessonKeys={currentStep.keys}
-      />
+      ) : (
+        <PracticeScreen
+          canGoBack={stepIndex > 0}
+          completed={lessonCompleted}
+          detectedNote={pitch.detectedNote}
+          feedback={feedback}
+          isListening={pitch.isListening}
+          lesson={selectedLesson}
+          mode={mode}
+          onBackHome={() => setScreen('home')}
+          onModeChange={changeMode}
+          onNextStep={goNext}
+          onPreviousStep={() => {
+            lastAcceptedNoteRef.current = '';
+            setStepIndex((index) => Math.max(0, index - 1));
+          }}
+          onRestart={restartLesson}
+          step={currentStep}
+          stepIndex={stepIndex}
+        />
+      )}
     </main>
   );
 };
+
+export const App = () => (window.location.pathname === '/ui-demos' ? <UiDemos /> : <LearningApp />);
