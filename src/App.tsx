@@ -8,6 +8,7 @@ import { useLessons } from './hooks/useLessons';
 import { usePitchDetection } from './hooks/usePitchDetection';
 import { useProgress } from './hooks/useProgress';
 import { hasFirebaseConfig } from './lib/firebase';
+import { playPianoNote } from './lib/pianoSynth';
 import { preloadVexFlow } from './lib/vexflowLoader';
 import type { FeedbackState, LearningMode, PianoKeyName } from './types';
 
@@ -189,11 +190,14 @@ const LearningApp = () => {
       return;
     }
 
+    void playPianoNote(note);
+    setManualDetectedNote(note);
+
     const expected = currentStep.expectedNote ?? currentStep.keys[0];
     if (!expected) {
+      setFeedback({ tone: 'idle', message: `${note.replace('#', '♯')} gespeeld.` });
       return;
     }
-    setManualDetectedNote(note);
 
     if (note === expected) {
       if (autoAdvanceTimerRef.current !== null) {
