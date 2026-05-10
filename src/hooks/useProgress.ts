@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { collection, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { ProgressRecord } from '../types';
 
@@ -8,6 +8,8 @@ type ProgressState = {
   loading: boolean;
   error: string;
   markCompleted: (lessonId: string) => Promise<void>;
+  resetCompleted: (lessonId: string) => Promise<void>;
+  resetAll: () => Promise<void>;
 };
 
 export const useProgress = (userId?: string): ProgressState => {
@@ -54,5 +56,28 @@ export const useProgress = (userId?: string): ProgressState => {
     });
   };
 
-  return { completedLessonIds, loading, error, markCompleted };
+  const resetCompleted = async (lessonId: string) => {
+    if (!db || !userId) {
+      return;
+    }
+
+    await deleteDoc(doc(db, 'users', userId, 'progress', lessonId));
+  };
+
+  const resetAll = async () => {
+    if (!db || !userId) {
+      return;
+    }
+
+    const snapshot = await getDocs(collection(db, 'users', userId, 'progress'));
+    if (snapshot.empty) {
+      return;
+    }
+
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((item) => batch.delete(item.ref));
+    await batch.commit();
+  };
+
+  return { completedLessonIds, loading, error, markCompleted, resetCompleted, resetAll };
 };

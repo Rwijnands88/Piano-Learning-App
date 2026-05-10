@@ -14,7 +14,7 @@ import type { FeedbackState, LearningMode, PianoKeyName } from './types';
 
 const initialFeedback: FeedbackState = {
   tone: 'idle',
-  message: 'Kies een les en speel de gemarkeerde toets of ga handmatig verder.',
+  message: 'Kies een les. Tijdens het oefenen zie je steeds een kort speeldoel.',
 };
 
 const LearningApp = () => {
@@ -62,17 +62,20 @@ const LearningApp = () => {
       pitch.resetError();
       setManualDetectedNote(null);
     } else {
-      setFeedback({ tone: 'idle', message: 'Handmatige modus is actief. Tik de gemarkeerde toets op het scherm.' });
+      setFeedback({ tone: 'idle', message: 'Handmatig: speel op je piano in je eigen tempo.' });
     }
 
     setMode(nextMode);
   };
 
-  const startPractice = () => {
-    if (selectedLesson) {
+  const startPractice = (lessonId = selectedLesson?.id) => {
+    const lessonToStart = lessons.find((lesson) => lesson.id === lessonId) ?? selectedLesson;
+
+    if (lessonToStart) {
+      setSelectedLessonId(lessonToStart.id);
       setCompletedSessionLessons((items) => {
         const next = new Set(items);
-        next.delete(selectedLesson.id);
+        next.delete(lessonToStart.id);
         return next;
       });
     }
@@ -101,9 +104,9 @@ const LearningApp = () => {
       tone: pitch.isListening ? 'listening' : 'idle',
       message:
         currentStep.recognitionMode === 'manual-score' || !expectedStepNote
-          ? 'Lees- of telstap. Gebruik Volgende wanneer je klaar bent.'
+          ? 'Lees de rust of telstap en ga verder wanneer je klaar bent.'
           : pitch.isListening
-            ? 'Luistermodus is actief. Speel de gemarkeerde toets.'
+            ? 'Luistert naar je piano.'
             : 'Microfoon wordt gestart...',
     });
   }, [currentStep, expectedStepNote, lessonCompleted, mode, pitch.isListening, screen, selectedLessonId, stepIndex]);
@@ -144,6 +147,20 @@ const LearningApp = () => {
   const markLessonCompleted = (lessonId: string) => {
     setCompletedSessionLessons((items) => new Set(items).add(lessonId));
     void progress.markCompleted(lessonId);
+  };
+
+  const resetLessonProgress = async (lessonId: string) => {
+    setCompletedSessionLessons((items) => {
+      const next = new Set(items);
+      next.delete(lessonId);
+      return next;
+    });
+    await progress.resetCompleted(lessonId);
+  };
+
+  const resetAllProgress = async () => {
+    setCompletedSessionLessons(new Set());
+    await progress.resetAll();
   };
 
   const openLesson = (lessonId: string, nextFeedback = initialFeedback) => {
@@ -197,7 +214,7 @@ const LearningApp = () => {
 
     setStepIndex((index) => index + 1);
     if (mode === 'manual') {
-      setFeedback({ tone: 'idle', message: 'Tik de gemarkeerde toets op het scherm.' });
+      setFeedback({ tone: 'idle', message: 'Nieuwe stap klaar. Speel hem rustig op je piano.' });
     }
   };
 
@@ -303,7 +320,10 @@ const LearningApp = () => {
           lessons={lessons}
           onLogOut={auth.logOut}
           onPreparePractice={preloadVexFlow}
+          onResetAllProgress={resetAllProgress}
+          onResetLessonProgress={resetLessonProgress}
           onSelectLesson={selectLesson}
+          onStartLesson={startPractice}
           onStartPractice={startPractice}
           selectedLessonId={selectedLesson.id}
           source={source}
