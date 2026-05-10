@@ -5,7 +5,7 @@ import { createScoreTimeline } from '../music/scoreTimeline';
 import { useScoreTransport } from '../music/useScoreTransport';
 import { PremiumKeyboard } from './PremiumKeyboard';
 import { ScoreRenderer } from './ScoreRenderer';
-import type { FeedbackState, LearningMode, Lesson, LessonStep, PianoKeyName, PracticeProfile } from '../types';
+import type { FeedbackState, LearningMode, Lesson, LessonStep, PianoKeyName, PracticeNoteFeedback, PracticeProfile } from '../types';
 
 type PracticeScreenProps = {
   lesson: Lesson;
@@ -15,6 +15,7 @@ type PracticeScreenProps = {
   isListening: boolean;
   detectedNote: PianoKeyName | null;
   feedback: FeedbackState;
+  noteFeedback: PracticeNoteFeedback;
   completed: boolean;
   canGoBack: boolean;
   onModeChange: (mode: LearningMode) => void;
@@ -38,6 +39,7 @@ export const PracticeScreen = ({
   isListening,
   detectedNote,
   feedback,
+  noteFeedback,
   completed,
   canGoBack,
   onModeChange,
@@ -51,7 +53,7 @@ export const PracticeScreen = ({
   practiceProfile,
 }: PracticeScreenProps) => {
   const [scorePlaying, setScorePlaying] = useState(false);
-  const [scoreSpeed, setScoreSpeed] = useState(75);
+  const [scoreSpeed, setScoreSpeed] = useState(65);
   const timeline = useMemo(() => createScoreTimeline(lesson), [lesson]);
   const transport = useScoreTransport({
     timeline,
@@ -98,6 +100,16 @@ export const PracticeScreen = ({
     error: 'Nog eens',
   }[feedback.tone];
   const practiceModeLabel = timeline.autoPlayable ? 'Meespelen' : mode === 'listen' ? 'Wait mode' : 'Eigen tempo';
+  const speedLabel = scoreSpeed <= 70 ? 'Rustig' : scoreSpeed < 95 ? 'Normaal' : 'Vloeiend';
+  const bubbleLabel = {
+    pending: 'Klaar',
+    active: 'Nu',
+    correct: 'Goed',
+    late: 'Bijna',
+    wrong: 'Nog eens',
+    missed: 'Gemist',
+  }[noteFeedback.kind];
+  const showFeedbackBubble = ['correct', 'late', 'wrong', 'missed'].includes(noteFeedback.kind);
   const statusCopy =
     feedback.tone === 'success' || feedback.tone === 'error' || feedback.tone === 'warning'
       ? feedback.message
@@ -176,9 +188,16 @@ export const PracticeScreen = ({
               feedbackTone={feedback.tone}
               activeStepIndex={stepIndex}
               currentBeat={transport.currentBeat}
+              noteFeedback={noteFeedback}
               timeline={timeline}
             />
           </div>
+          {showFeedbackBubble ? (
+            <div className={`player-feedback-bubble ${noteFeedback.kind}`} key={noteFeedback.pulseId} aria-live="polite">
+              <span>{bubbleLabel}</span>
+              <strong>{noteFeedback.message}</strong>
+            </div>
+          ) : null}
         </section>
       </main>
 
@@ -209,7 +228,7 @@ export const PracticeScreen = ({
               {scorePlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
               <span>{scorePlaying ? 'Pauze' : 'Start'}</span>
             </button>
-            <strong>{scoreSpeed}%</strong>
+            <strong>{speedLabel} · {scoreSpeed}%</strong>
             <input
               aria-label="Scoresnelheid"
               max="120"
@@ -231,6 +250,7 @@ export const PracticeScreen = ({
         expectedKey={step.expectedNote}
         feedbackTone={feedback.tone}
         lessonKeys={step.keys}
+        noteFeedback={noteFeedback}
         onKeyPress={onKeyPress}
       />
     </section>

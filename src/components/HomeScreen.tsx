@@ -1,11 +1,14 @@
 import {
   AlertTriangle,
+  Award,
   CheckCircle2,
   Clock3,
+  Crown,
   Flame,
   Gauge,
   Library,
   ListMusic,
+  LockKeyhole,
   LogOut,
   Map as MapIcon,
   Music2,
@@ -14,10 +17,12 @@ import {
   RotateCcw,
   SlidersHorizontal,
   Sparkles,
+  Star,
   Target,
   Trophy,
   UserRound,
 } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 import type { Lesson, PracticeProfile } from '../types';
 
@@ -29,7 +34,6 @@ type HomeScreenProps = {
   completedLessonIds: Set<string>;
   source: 'firestore' | 'bundled' | 'mixed';
   userName?: string | null;
-  onSelectLesson: (lessonId: string) => void;
   onStartPractice: () => void;
   onStartLesson: (lessonId: string) => void;
   onResetLessonProgress: (lessonId: string) => Promise<void>;
@@ -57,13 +61,43 @@ const sourceLabel = {
 
 const compactModuleName = (module: string) => module.replace(/^\d+\.\s*/, '');
 
+type ModuleStatus = 'completed' | 'current' | 'open' | 'preview';
+
+const statusLabel: Record<ModuleStatus, string> = {
+  completed: 'Voltooid',
+  current: 'Nu spelen',
+  open: 'Vrij',
+  preview: 'Vooruitblik',
+};
+
+const levelLabel = {
+  starter: 'Start',
+  beginner: 'Beginner',
+  'late-beginner': 'Next',
+  intermediate: 'Plus',
+} satisfies Record<NonNullable<Lesson['level']>, string>;
+
+const profileCopy = {
+  premium: {
+    title: 'Concert dark',
+    text: 'Donker, goud en vol contrast voor normale tablets en desktop.',
+  },
+  'ivory-light': {
+    title: 'Ivory light',
+    text: 'Lichter, stiller en prettig bij daglicht.',
+  },
+  'ipad-light': {
+    title: 'iPad 9.7 light',
+    text: 'Sneller en rustiger voor oudere tablets.',
+  },
+} satisfies Record<PracticeProfile, { title: string; text: string }>;
+
 export const HomeScreen = ({
   lessons,
   selectedLessonId,
   completedLessonIds,
   source,
   userName,
-  onSelectLesson,
   onStartPractice,
   onStartLesson,
   onResetLessonProgress,
@@ -78,7 +112,7 @@ export const HomeScreen = ({
   const [isResetting, setIsResetting] = useState(false);
   const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId) ?? lessons[0];
   const nextLesson = lessons.find((lesson) => !completedLessonIds.has(lesson.id)) ?? selectedLesson;
-  const activeLesson = selectedLesson ?? nextLesson;
+  const featuredLesson = nextLesson ?? selectedLesson;
   const displayName = userName?.trim() || 'Pianist';
   const completedCount = lessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
   const completionPercent = lessons.length > 0 ? Math.round((completedCount / lessons.length) * 100) : 0;
@@ -125,6 +159,80 @@ export const HomeScreen = ({
     recommendedPiece ? { label: 'Muziekstuk', lesson: recommendedPiece, detail: 'Speel iets dat als muziek voelt' } : null,
   ].filter(Boolean) as Array<{ label: string; lesson: Lesson; detail: string }>;
 
+  const activeModuleName = nextLesson?.module ?? selectedLesson?.module ?? modules[0]?.[0];
+  const activeModuleIndex = Math.max(0, modules.findIndex(([module]) => module === activeModuleName));
+  const levelScore = Math.floor(completedCount * 120 + completedMinutes * 8);
+  const currentStreak = Math.min(7, Math.max(1, Math.ceil(completedCount / 3)));
+  const nextMilestone = Math.max(5, Math.ceil((completedCount + 1) / 5) * 5);
+  const nextMilestoneProgress = Math.min(100, Math.round((completedCount / nextMilestone) * 100));
+  const unlockedModules = modules.filter(([, moduleLessons], index) => {
+    if (index <= activeModuleIndex + 1) {
+      return true;
+    }
+
+    const previousModule = modules[index - 1]?.[1] ?? [];
+    return previousModule.length > 0 && previousModule.every((lesson) => completedLessonIds.has(lesson.id));
+  }).length;
+
+  const moduleSnapshots = modules.map(([module, moduleLessons], index) => {
+    const done = moduleLessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
+    const firstOpen = moduleLessons.find((lesson) => !completedLessonIds.has(lesson.id)) ?? moduleLessons[0];
+    const percent = moduleLessons.length > 0 ? Math.round((done / moduleLessons.length) * 100) : 0;
+    const status: ModuleStatus =
+      done === moduleLessons.length ? 'completed' : module === activeModuleName ? 'current' : index <= activeModuleIndex + 1 ? 'open' : 'preview';
+
+    return {
+      done,
+      firstOpen,
+      index,
+      lessons: moduleLessons,
+      module,
+      percent,
+      status,
+    };
+  });
+
+  const achievements = [
+    {
+      id: 'first-lesson',
+      title: 'Eerste sessie',
+      detail: 'Je bent begonnen',
+      complete: completedCount >= 1,
+      icon: Star,
+    },
+    {
+      id: 'five-lessons',
+      title: 'Vijf lessen',
+      detail: `${Math.min(completedCount, 5)}/5 afgerond`,
+      complete: completedCount >= 5,
+      icon: Trophy,
+    },
+    {
+      id: 'first-piece',
+      title: 'Eerste stuk',
+      detail: 'Repertoire geopend',
+      complete: repertoireLessons.some((lesson) => completedLessonIds.has(lesson.id)),
+      icon: Music2,
+    },
+    {
+      id: 'chord-player',
+      title: 'Akkoordspeler',
+      detail: 'Harmonie module',
+      complete: lessons.some((lesson) => lesson.focus?.includes('akkoorden') && completedLessonIds.has(lesson.id)),
+      icon: Crown,
+    },
+    {
+      id: 'two-hands',
+      title: 'Twee handen',
+      detail: 'Coordinatie',
+      complete: lessons.some((lesson) => lesson.focus?.includes('twee handen') && completedLessonIds.has(lesson.id)),
+      icon: Award,
+    },
+  ];
+
+  const nextAchievement = achievements.find((achievement) => !achievement.complete) ?? achievements[achievements.length - 1];
+  const displayProfile = profileCopy[practiceProfile];
+
   const skillStats = useMemo(() => {
     const skillMap = new Map<string, { total: number; done: number }>();
 
@@ -150,10 +258,6 @@ export const HomeScreen = ({
       .sort((a, b) => b.total - a.total)
       .slice(0, 6);
   }, [completedLessonIds, lessons]);
-
-  const chooseLesson = (lessonId: string) => {
-    onSelectLesson(lessonId);
-  };
 
   const startLesson = (lessonId: string) => {
     onPreparePractice();
@@ -193,7 +297,12 @@ export const HomeScreen = ({
           <button className={activePanel === 'today' ? 'active' : ''} onClick={() => setActivePanel('today')} type="button">
             Vandaag
           </button>
-          <button onClick={() => onStartPractice()} onFocus={onPreparePractice} onPointerEnter={onPreparePractice} type="button">
+          <button
+            onClick={() => (featuredLesson ? startLesson(featuredLesson.id) : onStartPractice())}
+            onFocus={onPreparePractice}
+            onPointerEnter={onPreparePractice}
+            type="button"
+          >
             Oefenen
           </button>
         </nav>
@@ -211,24 +320,24 @@ export const HomeScreen = ({
         <div className="premium-home-screen pro-learning-home">
           <section className="premium-hero-panel pro-home-hero">
             <span className="premium-kicker">{sourceLabel[source]}</span>
-            <h1>Wat speel je vandaag?</h1>
-            <p>{activeLesson?.description ?? 'Kies een korte sessie en bouw rustig door aan je pianospel.'}</p>
+            <h1>Practice Hub</h1>
+            <p>Een duidelijke route: dagmissie, leerlijn, repertoire en groei. Geen losse selectie meer, elke kaart brengt je direct naar de oefening.</p>
 
             <div className="pro-hero-focus">
-              <small>Geselecteerd</small>
-              <strong>{activeLesson?.title ?? 'Vrij spelen'}</strong>
-              <span>{activeLesson ? `${compactModuleName(activeLesson.module)} · ${activeLesson.estimatedMinutes ?? 8} min` : 'Kies een les'}</span>
+              <small>Volgende stap</small>
+              <strong>{featuredLesson?.title ?? 'Vrij spelen'}</strong>
+              <span>{featuredLesson ? `${compactModuleName(featuredLesson.module)} · ${featuredLesson.estimatedMinutes ?? 8} min` : 'Kies een les'}</span>
             </div>
 
             <button
               className="premium-primary"
-              onClick={() => (activeLesson ? startLesson(activeLesson.id) : onStartPractice())}
+              onClick={() => (featuredLesson ? startLesson(featuredLesson.id) : onStartPractice())}
               onFocus={onPreparePractice}
               onPointerEnter={onPreparePractice}
               type="button"
             >
               <Play aria-hidden="true" />
-              Start oefening
+              Ga verder
             </button>
           </section>
 
@@ -255,22 +364,45 @@ export const HomeScreen = ({
           >
             {activePanel === 'today' ? (
               <div className="pro-panel-content">
-                <div className="pro-panel-header">
-                  <span>Dagplanning</span>
-                  <strong>Drie korte stappen, zonder zoeken</strong>
+                <div className="pro-panel-header pro-panel-header-split">
+                  <div>
+                    <span>Vandaag</span>
+                    <strong>Je oefenmissie staat klaar</strong>
+                  </div>
+                  <div className="pro-xp-chip">
+                    <Sparkles aria-hidden="true" />
+                    <span>{levelScore} XP</span>
+                  </div>
+                </div>
+                <div className="pro-mission-brief">
+                  <div>
+                    <small>Level route</small>
+                    <strong>{completionPercent}% programma</strong>
+                    <span>{unlockedModules}/{modules.length} hoofdstukken vrijgespeeld</span>
+                  </div>
+                  <div>
+                    <small>Streak</small>
+                    <strong>{currentStreak} dagen</strong>
+                    <span>Vandaag telt als je een sessie afrondt</span>
+                  </div>
+                  <div>
+                    <small>Volgende badge</small>
+                    <strong>{nextAchievement.title}</strong>
+                    <span>{nextAchievement.detail}</span>
+                  </div>
                 </div>
                 <div className="pro-session-grid">
                   {todayPlan.map(({ label, lesson, detail }) => (
                     <button
-                      className={lesson.id === selectedLessonId ? 'pro-session-card active' : 'pro-session-card'}
+                      className={lesson.id === featuredLesson?.id ? 'pro-session-card recommended' : 'pro-session-card'}
                       key={`${label}-${lesson.id}`}
-                      onClick={() => chooseLesson(lesson.id)}
+                      onClick={() => startLesson(lesson.id)}
                       type="button"
                     >
                       <small>{label}</small>
                       <strong>{lesson.title}</strong>
                       <span>{detail}</span>
-                      <em>{lesson.id === selectedLessonId ? 'Geselecteerd' : 'Selecteer'}</em>
+                      <em>{lesson.id === featuredLesson?.id ? 'Aanbevolen' : 'Start sessie'}</em>
                     </button>
                   ))}
                 </div>
@@ -296,49 +428,62 @@ export const HomeScreen = ({
 
             {activePanel === 'path' ? (
               <div className="pro-panel-content">
-                <div className="pro-panel-header">
-                  <span>Leerlijn</span>
-                  <strong>Van eerste toets naar tweehandig repertoire</strong>
+                <div className="pro-panel-header pro-panel-header-split">
+                  <div>
+                    <span>Leerlijn</span>
+                    <strong>Horizontale route naar echte stukken</strong>
+                  </div>
+                  <div className="pro-xp-chip">
+                    <MapIcon aria-hidden="true" />
+                    <span>{unlockedModules} unlocks</span>
+                  </div>
                 </div>
-                <div className="pro-module-stack">
-                  {modules.map(([module, moduleLessons]) => {
-                    const done = moduleLessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
-                    const firstOpen = moduleLessons.find((lesson) => !completedLessonIds.has(lesson.id)) ?? moduleLessons[0];
-                    const percent = Math.round((done / moduleLessons.length) * 100);
+                <div className="pro-course-track">
+                  {moduleSnapshots.map(({ done, firstOpen, index, lessons: moduleLessons, module, percent, status }) => {
+                    const resetLesson = [...moduleLessons].reverse().find((lesson) => completedLessonIds.has(lesson.id));
 
                     return (
-                      <article className="pro-module-card has-lesson-list" key={module}>
-                        <div>
-                          <small>{done}/{moduleLessons.length} afgerond</small>
+                      <article className={`pro-course-island ${status}`} key={module}>
+                        <div className="pro-course-top">
+                          <span>Hoofdstuk {index + 1}</span>
+                          <em>{statusLabel[status]}</em>
+                        </div>
+                        <button className="pro-course-main" onClick={() => firstOpen && startLesson(firstOpen.id)} type="button">
                           <strong>{compactModuleName(module)}</strong>
-                          <span>{firstOpen?.title ?? 'Module voltooid'}</span>
-                        </div>
-                        <div className="pro-module-progress" aria-label={`${percent}% afgerond`}>
-                          <i style={{ width: `${percent}%` }} />
-                        </div>
-                        <button onClick={() => firstOpen && chooseLesson(firstOpen.id)} type="button">
-                          {firstOpen?.id === selectedLessonId ? 'Geselecteerd' : done === moduleLessons.length ? 'Kies herhaling' : 'Selecteer'}
+                          <small>{firstOpen?.title ?? 'Module voltooid'}</small>
+                          <div className="pro-module-progress" aria-label={`${percent}% afgerond`}>
+                            <i style={{ width: `${percent}%` }} />
+                          </div>
                         </button>
-                        <div className="pro-lesson-reset-list">
-                          {moduleLessons.map((lesson) => {
+                        <div className="pro-course-node-row" aria-label={`Lessen in ${compactModuleName(module)}`}>
+                          {moduleLessons.map((lesson, lessonIndex) => {
                             const completed = completedLessonIds.has(lesson.id);
+                            const isNext = firstOpen?.id === lesson.id && status !== 'completed';
+                            const nodeClass = completed ? 'completed' : isNext ? 'next' : status === 'preview' ? 'preview' : 'open';
 
                             return (
-                              <div className={completed ? 'pro-lesson-reset-row completed' : 'pro-lesson-reset-row'} key={lesson.id}>
-                                <span>{completed ? <CheckCircle2 aria-hidden="true" /> : lesson.order / 10}</span>
-                                <strong>{lesson.title}</strong>
-                                <small>{lesson.estimatedMinutes ?? 8} min</small>
-                                <button onClick={() => startLesson(lesson.id)} type="button">Start</button>
-                                <button
-                                  disabled={!completed}
-                                  onClick={() => setResetPrompt({ kind: 'lesson', lesson })}
-                                  type="button"
-                                >
-                                  Reset
-                                </button>
-                              </div>
+                              <button
+                                aria-label={`${lesson.title} starten`}
+                                className={`pro-course-node ${nodeClass}`}
+                                key={lesson.id}
+                                onClick={() => startLesson(lesson.id)}
+                                title={lesson.title}
+                                type="button"
+                              >
+                                {completed ? <CheckCircle2 aria-hidden="true" /> : status === 'preview' ? <LockKeyhole aria-hidden="true" /> : <span>{lessonIndex + 1}</span>}
+                              </button>
                             );
                           })}
+                        </div>
+                        <div className="pro-course-footer">
+                          <span>{done}/{moduleLessons.length} afgerond</span>
+                          <button
+                            disabled={!resetLesson}
+                            onClick={() => resetLesson && setResetPrompt({ kind: 'lesson', lesson: resetLesson })}
+                            type="button"
+                          >
+                            Reset laatst
+                          </button>
                         </div>
                       </article>
                     );
@@ -349,57 +494,106 @@ export const HomeScreen = ({
 
             {activePanel === 'repertoire' ? (
               <div className="pro-panel-content">
-                <div className="pro-panel-header">
-                  <span>Repertoire</span>
-                  <strong>Muziekstukken die meegroeien met je niveau</strong>
+                <div className="pro-panel-header pro-panel-header-split">
+                  <div>
+                    <span>Repertoire</span>
+                    <strong>Muziekbibliotheek met echte speelduur</strong>
+                  </div>
+                  <div className="pro-xp-chip">
+                    <Library aria-hidden="true" />
+                    <span>{repertoireLessons.length} stukken</span>
+                  </div>
                 </div>
                 <div className="pro-card-grid">
-                  {repertoireLessons.map((lesson) => (
-                    <button
-                      className={lesson.id === selectedLessonId ? 'pro-library-card active' : 'pro-library-card'}
-                      key={lesson.id}
-                      onClick={() => chooseLesson(lesson.id)}
-                      onDoubleClick={() => startLesson(lesson.id)}
-                      type="button"
-                    >
-                      <Music2 aria-hidden="true" />
-                      <span>{lesson.level ?? 'beginner'}</span>
-                      <strong>{lesson.title}</strong>
-                      <small>{lesson.estimatedMinutes ?? 8} min · {lesson.steps.length} stappen</small>
-                    </button>
-                  ))}
+                  {repertoireLessons.map((lesson) => {
+                    const completed = completedLessonIds.has(lesson.id);
+                    const isRecommended = lesson.id === recommendedPiece?.id;
+
+                    return (
+                      <button
+                        className={completed ? 'pro-library-card completed' : isRecommended ? 'pro-library-card recommended' : 'pro-library-card'}
+                        key={lesson.id}
+                        onClick={() => startLesson(lesson.id)}
+                        type="button"
+                      >
+                        <Music2 aria-hidden="true" />
+                        <span>{levelLabel[lesson.level ?? 'beginner']}</span>
+                        <strong>{lesson.title}</strong>
+                        <small>{lesson.estimatedMinutes ?? 8} min · {lesson.steps.length} stappen</small>
+                        <i>{completed ? 'Voltooid' : isRecommended ? 'Aanbevolen' : lesson.source === 'original' ? 'Origineel' : 'Traditioneel'}</i>
+                        <em className="pro-card-action">Start stuk</em>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
 
             {activePanel === 'workouts' ? (
               <div className="pro-panel-content">
-                <div className="pro-panel-header">
-                  <span>Workouts</span>
-                  <strong>Korte trainingen voor techniek, lezen en akkoorden</strong>
+                <div className="pro-panel-header pro-panel-header-split">
+                  <div>
+                    <span>Workouts</span>
+                    <strong>Arcade-achtige drills voor spiergeheugen</strong>
+                  </div>
+                  <div className="pro-xp-chip">
+                    <Flame aria-hidden="true" />
+                    <span>+120 XP</span>
+                  </div>
                 </div>
                 <div className="pro-card-grid compact">
-                  {workoutLessons.map((lesson) => (
-                    <button
-                      className={lesson.id === selectedLessonId ? 'pro-workout-card active' : 'pro-workout-card'}
-                      key={lesson.id}
-                      onClick={() => chooseLesson(lesson.id)}
-                      type="button"
-                    >
-                      <Flame aria-hidden="true" />
-                      <strong>{lesson.title}</strong>
-                      <span>{lesson.focus?.join(' · ') ?? 'training'}</span>
-                    </button>
-                  ))}
+                  {workoutLessons.map((lesson) => {
+                    const completed = completedLessonIds.has(lesson.id);
+
+                    return (
+                      <button
+                        className={completed ? 'pro-workout-card completed' : lesson.id === recommendedWorkout?.id ? 'pro-workout-card recommended' : 'pro-workout-card'}
+                        key={lesson.id}
+                        onClick={() => startLesson(lesson.id)}
+                        type="button"
+                      >
+                        <Flame aria-hidden="true" />
+                        <strong>{lesson.title}</strong>
+                        <span>{lesson.focus?.join(' · ') ?? 'training'}</span>
+                        <i>{completed ? 'Claimed' : lesson.id === recommendedWorkout?.id ? 'Daily boost' : `${lesson.estimatedMinutes ?? 6} min`}</i>
+                        <em className="pro-card-action">Start training</em>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
 
             {activePanel === 'growth' ? (
               <div className="pro-panel-content">
-                <div className="pro-panel-header">
-                  <span>Groei</span>
-                  <strong>Waar je sterker wordt</strong>
+                <div className="pro-panel-header pro-panel-header-split">
+                  <div>
+                    <span>Groei</span>
+                    <strong>Level, badges en vaardigheid</strong>
+                  </div>
+                  <div className="pro-xp-chip">
+                    <Trophy aria-hidden="true" />
+                    <span>{levelScore} XP</span>
+                  </div>
+                </div>
+                <div className="pro-growth-hero">
+                  <div>
+                    <small>Volgende mijlpaal</small>
+                    <strong>{completedCount}/{nextMilestone} lessen</strong>
+                    <span>Blijf rustig bouwen. Kleine sessies tellen ook.</span>
+                  </div>
+                  <div className="pro-ring" style={{ '--progress': `${nextMilestoneProgress}%` } as CSSProperties}>
+                    <span>{nextMilestoneProgress}%</span>
+                  </div>
+                </div>
+                <div className="pro-achievement-row">
+                  {achievements.map(({ complete, detail, icon: Icon, id, title }) => (
+                    <article className={complete ? 'pro-achievement complete' : 'pro-achievement'} key={id}>
+                      <Icon aria-hidden="true" />
+                      <strong>{title}</strong>
+                      <span>{detail}</span>
+                    </article>
+                  ))}
                 </div>
                 <div className="pro-skill-grid">
                   {skillStats.map(({ skill, done, total, percent }) => (
@@ -447,19 +641,22 @@ export const HomeScreen = ({
                   <article className="pro-studio-card pro-display-profile">
                     <SlidersHorizontal aria-hidden="true" />
                     <small>Weergave</small>
-                    <strong>{practiceProfile === 'ipad-light' ? 'iPad 9.7 light' : 'Premium'}</strong>
-                    <span>
-                      {practiceProfile === 'ipad-light'
-                        ? 'Lichter, rustiger en sneller voor oudere tablets.'
-                        : 'Volle visuele laag voor moderne schermen.'}
-                    </span>
+                    <strong>{displayProfile.title}</strong>
+                    <span>{displayProfile.text}</span>
                     <div className="pro-profile-toggle" role="group" aria-label="Weergaveprofiel">
                       <button
                         className={practiceProfile === 'premium' ? 'active' : ''}
                         onClick={() => onPracticeProfileChange('premium')}
                         type="button"
                       >
-                        Premium
+                        Dark
+                      </button>
+                      <button
+                        className={practiceProfile === 'ivory-light' ? 'active' : ''}
+                        onClick={() => onPracticeProfileChange('ivory-light')}
+                        type="button"
+                      >
+                        White
                       </button>
                       <button
                         className={practiceProfile === 'ipad-light' ? 'active' : ''}

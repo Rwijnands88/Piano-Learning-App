@@ -79,9 +79,20 @@ export type ProgressRecord = {
 
 export type LearningMode = 'listen' | 'manual';
 
-export type PracticeProfile = 'premium' | 'ipad-light';
+export type PracticeProfile = 'premium' | 'ivory-light' | 'ipad-light';
 
 export type FeedbackState = {
   tone: 'idle' | 'listening' | 'success' | 'warning' | 'error';
   message: string;
+};
+
+export type PracticeNoteFeedbackKind = 'pending' | 'active' | 'correct' | 'late' | 'wrong' | 'missed';
+
+export type PracticeNoteFeedback = {
+  kind: PracticeNoteFeedbackKind;
+  stepIndex: number;
+  expectedNote?: PianoKeyName;
+  detectedNote?: PianoKeyName | null;
+  message: string;
+  pulseId: number;
 };

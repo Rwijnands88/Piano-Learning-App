@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadVexFlow } from '../lib/vexflowLoader';
 import type { ScoreEvent, ScoreTimeline } from '../music/scoreTimeline';
-import type { FeedbackState, LessonStep, PianoKeyName, StepNote } from '../types';
+import type { FeedbackState, LessonStep, PianoKeyName, PracticeNoteFeedback, PracticeNoteFeedbackKind, StepNote } from '../types';
 
 type ScoreRendererProps = {
   timeline: ScoreTimeline;
   activeStepIndex: number;
   currentBeat: number;
   feedbackTone?: FeedbackState['tone'];
+  noteFeedback?: PracticeNoteFeedback;
 };
 
 const scoreColors = {
@@ -133,11 +134,13 @@ export const ScoreRenderer = ({
   activeStepIndex,
   currentBeat,
   feedbackTone = 'idle',
+  noteFeedback,
 }: ScoreRendererProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const currentBeatRef = useRef(currentBeat);
   const activeStepIndexRef = useRef(activeStepIndex);
   const feedbackToneRef = useRef<FeedbackState['tone']>(feedbackTone);
+  const noteFeedbackRef = useRef<PracticeNoteFeedback | undefined>(noteFeedback);
   const layoutRef = useRef<ScoreLayout | null>(null);
   const renderRequestRef = useRef(0);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -185,7 +188,16 @@ export const ScoreRenderer = ({
   const displayTotalBeats = scoreEvents.at(-1)?.beatEnd ?? timeline.totalBeats;
   const displayMeasureCount = Math.max(1, Math.ceil(displayTotalBeats / timeline.beatsPerMeasure));
   const scrollingScore = timeline.autoPlayable;
-  const updateFeedbackOverlay = useCallback((stepIndex: number, tone: FeedbackState['tone']) => {
+  const feedbackKind =
+    noteFeedback?.kind ??
+    ({
+      idle: 'active',
+      listening: 'active',
+      success: 'correct',
+      warning: 'late',
+      error: 'wrong',
+    } satisfies Record<FeedbackState['tone'], PracticeNoteFeedbackKind>)[feedbackTone];
+  const updateFeedbackOverlay = useCallback((stepIndex: number, kind: PracticeNoteFeedbackKind, feedback?: PracticeNoteFeedback) => {
     const container = containerRef.current;
     const layout = layoutRef.current;
 
@@ -209,9 +221,18 @@ export const ScoreRenderer = ({
     }
 
     const label = event.keys[0]?.replace('#', '♯') ?? (event.isRest ? 'rust' : 'nu');
-    marker.className = `score-note-target ${tone}`;
+    const previousPosition = layout.positions[Math.max(0, stepIndex - 1)] ?? position;
+    const nextPosition = layout.positions[Math.min(stepIndex + 1, layout.positions.length - 1)] ?? position;
+    const leftSpan = Math.abs(position.x - previousPosition.x);
+    const rightSpan = Math.abs(nextPosition.x - position.x);
+    const localSpacing = Math.max(leftSpan || rightSpan, rightSpan || leftSpan, 88);
+    const hitWindowWidth = event.isRest ? Math.min(118, Math.max(72, localSpacing * 0.46)) : Math.min(152, Math.max(82, localSpacing * 0.62));
+
+    marker.className = `score-note-target ${kind}`;
     marker.dataset.label = label;
+    marker.dataset.message = feedback?.message ?? '';
     marker.style.left = `${position.x}px`;
+    marker.style.width = `${hitWindowWidth}px`;
     marker.style.top = `${layout.noteTop}px`;
     marker.style.height = `${layout.noteHeight}px`;
   }, [scoreEvents]);
@@ -264,8 +285,9 @@ export const ScoreRenderer = ({
   useEffect(() => {
     activeStepIndexRef.current = activeStepIndex;
     feedbackToneRef.current = feedbackTone;
-    updateFeedbackOverlay(activeStepIndex, feedbackTone);
-  }, [activeStepIndex, feedbackTone, updateFeedbackOverlay]);
+    noteFeedbackRef.current = noteFeedback;
+    updateFeedbackOverlay(activeStepIndex, feedbackKind, noteFeedback);
+  }, [activeStepIndex, feedbackKind, feedbackTone, noteFeedback, updateFeedbackOverlay]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -305,16 +327,16 @@ export const ScoreRenderer = ({
         const grandStaff = usesGrandStaff(scoreEvents.map((event) => event.step));
         const viewportWidth = Math.max(rawViewportWidth, compact ? 320 : 420);
         const viewportHeight = Math.max(rawViewportHeight, grandStaff ? 360 : 310);
-        const pixelsPerBeat = compact ? 150 : 190;
+        const pixelsPerBeat = compact ? 104 : 128;
         const noteSpacing = pixelsPerBeat;
         const playheadX = scrollingScore ? viewportWidth * (compact ? 0.38 : 0.42) : viewportWidth * 0.5;
         const leadIn = scrollingScore ? playheadX : 0;
-        const tailOut = scrollingScore ? viewportWidth - playheadX + noteSpacing * 1.45 : Math.max(36, viewportWidth * 0.04);
+        const tailOut = scrollingScore ? viewportWidth - playheadX + noteSpacing * 1.18 : Math.max(36, viewportWidth * 0.04);
         const width = scrollingScore
-          ? Math.max(viewportWidth, leadIn + Math.max(scoreEvents.length * 86, displayTotalBeats * pixelsPerBeat) + tailOut)
+          ? Math.max(viewportWidth, leadIn + Math.max(scoreEvents.length * 62, displayTotalBeats * pixelsPerBeat) + tailOut)
           : viewportWidth;
         const height = viewportHeight;
-        const staveX = scrollingScore ? Math.max(compact ? 34 : 48, leadIn * 0.72) : Math.max(compact ? 56 : 72, viewportWidth * 0.07);
+        const staveX = scrollingScore ? Math.max(compact ? 28 : 42, leadIn * 0.68) : Math.max(compact ? 56 : 72, viewportWidth * 0.07);
         const lineSpacing = grandStaff
           ? Math.max(compact ? 22 : 25, Math.min(36, height * 0.082))
           : Math.max(compact ? 29 : 33, Math.min(46, height * 0.14));
@@ -431,7 +453,7 @@ export const ScoreRenderer = ({
 
         const formatter = new Formatter();
         voices.forEach((voice) => formatter.joinVoices([voice]));
-        formatter.format(voices, Math.max(compact ? 240 : 340, staveWidth - (scrollingScore ? (compact ? 130 : 185) : 82)));
+        formatter.format(voices, Math.max(compact ? 210 : 290, staveWidth - (scrollingScore ? (compact ? 104 : 138) : 82)));
         trebleVoice.draw(context, trebleStave);
         if (grandStaff && voices[1] && staves[1]) {
           voices[1].draw(context, staves[1]);
@@ -511,7 +533,18 @@ export const ScoreRenderer = ({
           noteHeight: grandStaff ? bassStaveY + lineSpacing * 5.7 - topStaveY : lineSpacing * 6.4,
         };
         applyScoreScroll(currentBeatRef.current);
-        updateFeedbackOverlay(activeStepIndexRef.current, feedbackToneRef.current);
+        updateFeedbackOverlay(
+          activeStepIndexRef.current,
+          noteFeedbackRef.current?.kind ??
+            ({
+              idle: 'active',
+              listening: 'active',
+              success: 'correct',
+              warning: 'late',
+              error: 'wrong',
+            } satisfies Record<FeedbackState['tone'], PracticeNoteFeedbackKind>)[feedbackToneRef.current],
+          noteFeedbackRef.current,
+        );
         setLoadState('ready');
       } catch {
         if (!disposed && requestId === renderRequestRef.current) {
@@ -535,7 +568,7 @@ export const ScoreRenderer = ({
 
   return (
     <div
-      className={`${scrollingScore ? 'score-renderer scrolling' : 'score-renderer static'} tone-${feedbackTone}`}
+      className={`${scrollingScore ? 'score-renderer scrolling' : 'score-renderer static'} tone-${feedbackTone} feedback-${feedbackKind}`}
       aria-label={`Bladmuziekweergave, stap ${activeStepIndex + 1}`}
     >
       <div className="score-playhead" aria-hidden="true" />

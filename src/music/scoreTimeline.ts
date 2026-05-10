@@ -84,12 +84,18 @@ const recognitionForStep = (step: LessonStep): RecognitionMode => {
   return step.keys.length > 1 ? 'chord' : 'single-note';
 };
 
-const lessonSupportsAutoplay = (lesson: Lesson) =>
-  lesson.level !== 'starter' ||
-  lesson.module.includes('Eerste melodieen') ||
-  lesson.module.includes('Repertoire') ||
-  lesson.module.includes('Klassieke') ||
-  lesson.module.includes('Minimalistische');
+export const lessonSupportsAutoplay = (lesson: Lesson) => {
+  const moduleName = lesson.module.toLowerCase();
+
+  return (
+    lesson.source === 'traditional' ||
+    lesson.source === 'public-domain' ||
+    moduleName.includes('eerste melodieen') ||
+    moduleName.includes('repertoire') ||
+    moduleName.includes('klassieke') ||
+    moduleName.includes('minimalistische')
+  );
+};
 
 export const createScoreTimeline = (lesson: Lesson): ScoreTimeline => {
   const beatsPerMeasure = beatsPerMeasureFor(lesson.timeSignature);
@@ -150,4 +156,3 @@ export const eventAtBeat = (timeline: ScoreTimeline, beat: number) => {
 
 export const stepIndexForBeat = (timeline: ScoreTimeline, beat: number) =>
   eventAtBeat(timeline, beat)?.stepIndex ?? 0;
-

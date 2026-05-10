@@ -1,11 +1,12 @@
 import { pianoKeys, whiteKeys } from '../data/piano';
-import type { FeedbackState, PianoKeyName } from '../types';
+import type { FeedbackState, PianoKeyName, PracticeNoteFeedback } from '../types';
 
 type PremiumKeyboardProps = {
   lessonKeys: PianoKeyName[];
   detectedKey: PianoKeyName | null;
   expectedKey?: PianoKeyName;
   feedbackTone?: FeedbackState['tone'];
+  noteFeedback?: PracticeNoteFeedback;
   disabled?: boolean;
   onKeyPress?: (note: PianoKeyName) => void;
 };
@@ -23,6 +24,7 @@ export const PremiumKeyboard = ({
   detectedKey,
   expectedKey,
   feedbackTone = 'idle',
+  noteFeedback,
   disabled = false,
   onKeyPress,
 }: PremiumKeyboardProps) => {
@@ -30,13 +32,15 @@ export const PremiumKeyboard = ({
   const canPlay = Boolean(onKeyPress) && !disabled;
 
   return (
-    <div className={`premium-keys feedback-${feedbackTone}`} aria-label="Piano toetsenbord">
+    <div className={`premium-keys feedback-${noteFeedback?.kind ?? feedbackTone}`} aria-label="Piano toetsenbord">
       <div className="premium-white-row">
         {whiteKeys.map((key) => {
           const classes = [
             lessonSet.has(key.note) ? 'lesson' : '',
             detectedKey === key.note ? 'detected' : '',
             expectedKey === key.note ? 'expected' : '',
+            noteFeedback?.expectedNote === key.note ? `target-${noteFeedback.kind}` : '',
+            noteFeedback?.detectedNote === key.note ? `attempt-${noteFeedback.kind}` : '',
           ]
             .filter(Boolean)
             .join(' ');
@@ -67,6 +71,8 @@ export const PremiumKeyboard = ({
               lessonSet.has(key.note) ? 'lesson' : '',
               detectedKey === key.note ? 'detected' : '',
               expectedKey === key.note ? 'expected' : '',
+              noteFeedback?.expectedNote === key.note ? `target-${noteFeedback.kind}` : '',
+              noteFeedback?.detectedNote === key.note ? `attempt-${noteFeedback.kind}` : '',
             ]
               .filter(Boolean)
               .join(' ');

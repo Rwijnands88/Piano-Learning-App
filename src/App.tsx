@@ -12,7 +12,8 @@ import { useProgress } from './hooks/useProgress';
 import { hasFirebaseConfig } from './lib/firebase';
 import { playPianoNote } from './lib/pianoSynth';
 import { preloadVexFlow } from './lib/vexflowLoader';
-import type { FeedbackState, LearningMode, PianoKeyName, PracticeProfile } from './types';
+import { lessonSupportsAutoplay } from './music/scoreTimeline';
+import type { FeedbackState, LearningMode, PianoKeyName, PracticeNoteFeedback, PracticeNoteFeedbackKind, PracticeProfile } from './types';
 
 const initialFeedback: FeedbackState = {
   tone: 'idle',
@@ -21,7 +22,7 @@ const initialFeedback: FeedbackState = {
 
 const storedPracticeProfile = (): PracticeProfile => {
   const stored = window.localStorage.getItem('practice-profile');
-  if (stored === 'ipad-light' || stored === 'premium') {
+  if (stored === 'ipad-light' || stored === 'ivory-light' || stored === 'premium') {
     return stored;
   }
 
@@ -39,10 +40,17 @@ const LearningApp = () => {
   const [mode, setMode] = useState<LearningMode>('listen');
   const [practiceProfile, setPracticeProfile] = useState<PracticeProfile>(storedPracticeProfile);
   const [feedback, setFeedback] = useState<FeedbackState>(initialFeedback);
+  const [noteFeedback, setNoteFeedback] = useState<PracticeNoteFeedback>({
+    kind: 'pending',
+    stepIndex: 0,
+    message: 'Kies een les.',
+    pulseId: 0,
+  });
   const [manualDetectedNote, setManualDetectedNote] = useState<PianoKeyName | null>(null);
   const [completedSessionLessons, setCompletedSessionLessons] = useState<Set<string>>(new Set());
   const lastAcceptedNoteRef = useRef<string>('');
   const autoAdvanceTimerRef = useRef<number | null>(null);
+  const noteFeedbackPulseRef = useRef(0);
 
   useEffect(() => {
     if (!selectedLessonId && lessons.length > 0) {
@@ -66,6 +74,7 @@ const LearningApp = () => {
     currentStep?.recognitionMode !== 'chord' &&
     Boolean(expectedStepNote);
   const lessonCompleted = Boolean(selectedLesson && completedSessionLessons.has(selectedLesson.id));
+  const selectedLessonAutoPlayable = Boolean(selectedLesson && lessonSupportsAutoplay(selectedLesson));
   const nextLesson = lessons[selectedLessonIndex + 1];
   const displayedCompletedLessonIds = useMemo(
     () => new Set([...progress.completedLessonIds, ...completedSessionLessons]),
@@ -81,6 +90,23 @@ const LearningApp = () => {
   useEffect(() => {
     window.localStorage.setItem('practice-profile', practiceProfile);
   }, [practiceProfile]);
+
+  const publishNoteFeedback = (
+    kind: PracticeNoteFeedbackKind,
+    message: string,
+    detectedNote: PianoKeyName | null = null,
+  ) => {
+    const expected = currentStep?.expectedNote ?? currentStep?.keys[0];
+
+    setNoteFeedback({
+      kind,
+      stepIndex,
+      expectedNote: expected,
+      detectedNote,
+      message,
+      pulseId: (noteFeedbackPulseRef.current += 1),
+    });
+  };
 
   const changeMode = (nextMode: LearningMode) => {
     if (nextMode === 'listen') {
@@ -127,9 +153,29 @@ const LearningApp = () => {
   };
 
   useEffect(() => {
+    if (!currentStep || screen !== 'practice') {
+      return;
+    }
+
+    const expected = currentStep.expectedNote ?? currentStep.keys[0];
+    const nextKind: PracticeNoteFeedbackKind = currentStep.keys.length === 0 ? 'pending' : 'active';
+    const label = expected?.replace('#', '♯') ?? 'rust';
+
+    setNoteFeedback({
+      kind: nextKind,
+      stepIndex,
+      expectedNote: expected,
+      detectedNote: null,
+      message: currentStep.keys.length === 0 ? 'Tel de rust rustig door.' : `Speel ${label}.`,
+      pulseId: (noteFeedbackPulseRef.current += 1),
+    });
+  }, [currentStep, screen, selectedLessonId, stepIndex]);
+
+  useEffect(() => {
     if (screen === 'practice' && pitch.permissionDenied) {
       setMode('manual');
       setFeedback({ tone: 'warning', message: pitch.error || 'Microfoon geweigerd. Handmatige modus is actief.' });
+      publishNoteFeedback('late', 'Handmatige modus is actief.');
     }
   }, [pitch.error, pitch.permissionDenied, screen]);
 
@@ -172,15 +218,29 @@ const LearningApp = () => {
 
     if (pitch.detectedNote === expectedStepNote) {
       lastAcceptedNoteRef.current = attemptKey;
-      setFeedback({ tone: 'success', message: `${pitch.detectedNote.replace('#', '♯')} klopt. Door naar de volgende stap.` });
-      autoAdvanceTimerRef.current = window.setTimeout(() => {
-        goNext();
-      }, 650);
+      setFeedback({
+        tone: 'success',
+        message: selectedLessonAutoPlayable
+          ? `${pitch.detectedNote.replace('#', '♯')} klopt. Blijf in de puls.`
+          : `${pitch.detectedNote.replace('#', '♯')} klopt. Door naar de volgende stap.`,
+      });
+      publishNoteFeedback('correct', `Goed: ${pitch.detectedNote.replace('#', '♯')}.`, pitch.detectedNote);
+
+      if (!selectedLessonAutoPlayable) {
+        autoAdvanceTimerRef.current = window.setTimeout(() => {
+          goNext();
+        }, 650);
+      }
     } else {
       setFeedback({
         tone: 'error',
         message: `${pitch.detectedNote.replace('#', '♯')} gehoord. Probeer ${expectedStepNote.replace('#', '♯')}.`,
       });
+      publishNoteFeedback(
+        'wrong',
+        `${pitch.detectedNote.replace('#', '♯')} gehoord, probeer ${expectedStepNote.replace('#', '♯')}.`,
+        pitch.detectedNote,
+      );
     }
   }, [
     canMatchWithMicrophone,
@@ -190,6 +250,7 @@ const LearningApp = () => {
     mode,
     pitch.detectedNote,
     screen,
+    selectedLessonAutoPlayable,
     selectedLesson?.id,
     stepIndex,
   ]);
@@ -243,14 +304,6 @@ const LearningApp = () => {
     setScreen('complete');
   };
 
-  const openLesson = (lessonId: string, nextFeedback = initialFeedback) => {
-    setSelectedLessonId(lessonId);
-    setStepIndex(0);
-    lastAcceptedNoteRef.current = '';
-    setManualDetectedNote(null);
-    setFeedback(nextFeedback);
-  };
-
   const goNext = () => {
     if (!selectedLesson) {
       return;
@@ -279,10 +332,6 @@ const LearningApp = () => {
     if (mode === 'manual') {
       setFeedback({ tone: 'idle', message: 'Nieuwe stap klaar. Speel hem rustig op je piano.' });
     }
-  };
-
-  const selectLesson = (lessonId: string) => {
-    openLesson(lessonId);
   };
 
   const restartLesson = () => {
@@ -325,6 +374,7 @@ const LearningApp = () => {
     const expected = currentStep.expectedNote ?? currentStep.keys[0];
     if (!expected) {
       setFeedback({ tone: 'idle', message: `${note.replace('#', '♯')} gespeeld.` });
+      publishNoteFeedback('active', `${note.replace('#', '♯')} gespeeld.`, note);
       return;
     }
 
@@ -334,6 +384,7 @@ const LearningApp = () => {
       }
 
       setFeedback({ tone: 'success', message: `${note.replace('#', '♯')} klopt. Door naar de volgende stap.` });
+      publishNoteFeedback('correct', `Goed: ${note.replace('#', '♯')}.`, note);
       autoAdvanceTimerRef.current = window.setTimeout(() => {
         goNext();
       }, 450);
@@ -344,6 +395,7 @@ const LearningApp = () => {
       tone: 'error',
       message: `${note.replace('#', '♯')} gekozen. Probeer ${expected.replace('#', '♯')}.`,
     });
+    publishNoteFeedback('wrong', `${note.replace('#', '♯')} gekozen, probeer ${expected.replace('#', '♯')}.`, note);
   };
 
   if (auth.loading) {
@@ -396,7 +448,6 @@ const LearningApp = () => {
           onResetAllProgress={resetAllProgress}
           onResetLessonProgress={resetLessonProgress}
           onPracticeProfileChange={setPracticeProfile}
-          onSelectLesson={selectLesson}
           onStartLesson={openLessonIntro}
           onStartPractice={() => openLessonIntro()}
           practiceProfile={practiceProfile}
@@ -431,6 +482,7 @@ const LearningApp = () => {
           isListening={pitch.isListening}
           lesson={selectedLesson}
           mode={mode}
+          noteFeedback={noteFeedback}
           onBackHome={() => setScreen('home')}
           onKeyPress={handleManualKeyPress}
           onModeChange={changeMode}
