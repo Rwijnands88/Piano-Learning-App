@@ -1,14 +1,15 @@
 import { FormEvent, useState } from 'react';
-import { Eye, Lock, Mail, Music2 } from 'lucide-react';
+import { Eye, Lock, Mail, Music2, UserRound } from 'lucide-react';
 
 type AuthScreenProps = {
   error: string;
   loading: boolean;
   onSignIn: (email: string, password: string) => Promise<void>;
-  onRegister: (email: string, password: string) => Promise<void>;
+  onRegister: (email: string, password: string, username: string) => Promise<void>;
 };
 
 export const AuthScreen = ({ error, loading, onSignIn, onRegister }: AuthScreenProps) => {
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
@@ -20,7 +21,7 @@ export const AuthScreen = ({ error, loading, onSignIn, onRegister }: AuthScreenP
     setBusy(true);
     try {
       if (isRegistering) {
-        await onRegister(email, password);
+        await onRegister(email, password, username);
       } else {
         await onSignIn(email, password);
       }
@@ -42,6 +43,25 @@ export const AuthScreen = ({ error, loading, onSignIn, onRegister }: AuthScreenP
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
+          {isRegistering ? (
+            <label className="field">
+              <span>Gebruikersnaam</span>
+              <div className="input-shell">
+                <UserRound aria-hidden="true" />
+                <input
+                  autoComplete="nickname"
+                  maxLength={24}
+                  minLength={2}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="Bijv. Rob of Mama"
+                  required
+                  type="text"
+                  value={username}
+                />
+              </div>
+            </label>
+          ) : null}
+
           <label className="field">
             <span>E-mail</span>
             <div className="input-shell">

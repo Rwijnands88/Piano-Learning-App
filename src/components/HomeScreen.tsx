@@ -4,12 +4,10 @@ import {
   Clock3,
   Flame,
   Gauge,
-  Hand,
   Library,
   ListMusic,
   LogOut,
   Map as MapIcon,
-  Mic,
   Music2,
   Piano,
   Play,
@@ -21,7 +19,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { Lesson } from '../types';
+import type { Lesson, PracticeProfile } from '../types';
 
 type HomePanel = 'today' | 'path' | 'repertoire' | 'workouts' | 'growth' | 'studio';
 
@@ -30,12 +28,14 @@ type HomeScreenProps = {
   selectedLessonId: string;
   completedLessonIds: Set<string>;
   source: 'firestore' | 'bundled' | 'mixed';
-  userEmail?: string | null;
+  userName?: string | null;
   onSelectLesson: (lessonId: string) => void;
   onStartPractice: () => void;
   onStartLesson: (lessonId: string) => void;
   onResetLessonProgress: (lessonId: string) => Promise<void>;
   onResetAllProgress: () => Promise<void>;
+  practiceProfile: PracticeProfile;
+  onPracticeProfileChange: (profile: PracticeProfile) => void;
   onPreparePractice: () => void;
   onLogOut: () => void;
 };
@@ -46,7 +46,7 @@ const panelItems: Array<{ id: HomePanel; title: string; subtitle: string; icon: 
   { id: 'repertoire', title: 'Repertoire', subtitle: 'Stukken', icon: Library },
   { id: 'workouts', title: 'Workouts', subtitle: 'Korte training', icon: Flame },
   { id: 'growth', title: 'Groei', subtitle: 'Voortgang', icon: Trophy },
-  { id: 'studio', title: 'Studio', subtitle: 'Modus en account', icon: SlidersHorizontal },
+  { id: 'studio', title: 'Studio', subtitle: 'Account', icon: SlidersHorizontal },
 ];
 
 const sourceLabel = {
@@ -62,12 +62,14 @@ export const HomeScreen = ({
   selectedLessonId,
   completedLessonIds,
   source,
-  userEmail,
+  userName,
   onSelectLesson,
   onStartPractice,
   onStartLesson,
   onResetLessonProgress,
   onResetAllProgress,
+  practiceProfile,
+  onPracticeProfileChange,
   onPreparePractice,
   onLogOut,
 }: HomeScreenProps) => {
@@ -77,7 +79,7 @@ export const HomeScreen = ({
   const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId) ?? lessons[0];
   const nextLesson = lessons.find((lesson) => !completedLessonIds.has(lesson.id)) ?? selectedLesson;
   const activeLesson = selectedLesson ?? nextLesson;
-  const [accountName, accountDomain] = userEmail?.split('@') ?? [];
+  const displayName = userName?.trim() || 'Pianist';
   const completedCount = lessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
   const completionPercent = lessons.length > 0 ? Math.round((completedCount / lessons.length) * 100) : 0;
   const completedMinutes = lessons
@@ -96,18 +98,21 @@ export const HomeScreen = ({
 
   const repertoireLessons = useMemo(
     () =>
-      lessons.filter((lesson) =>
-        lesson.source === 'traditional' ||
-        lesson.source === 'public-domain' ||
-        lesson.module.includes('Repertoire') ||
-        lesson.module.includes('Klassieke') ||
-        lesson.module.includes('Minimalistische'),
-      ),
+      lessons.filter((lesson) => {
+        const moduleName = lesson.module.toLowerCase();
+        return (
+          lesson.source === 'traditional' ||
+          lesson.source === 'public-domain' ||
+          moduleName.includes('repertoire') ||
+          moduleName.includes('klassieke') ||
+          moduleName.includes('minimalistische')
+        );
+      }),
     [lessons],
   );
 
   const workoutLessons = useMemo(
-    () => lessons.filter((lesson) => lesson.module.includes('Workouts') || lesson.tags?.includes('workout')),
+    () => lessons.filter((lesson) => lesson.module.toLowerCase().includes('workout') || lesson.tags?.includes('workout')),
     [lessons],
   );
 
@@ -188,14 +193,14 @@ export const HomeScreen = ({
           <button className={activePanel === 'today' ? 'active' : ''} onClick={() => setActivePanel('today')} type="button">
             Vandaag
           </button>
-          <button onClick={onStartPractice} onFocus={onPreparePractice} onPointerEnter={onPreparePractice} type="button">
-            Start
+          <button onClick={() => onStartPractice()} onFocus={onPreparePractice} onPointerEnter={onPreparePractice} type="button">
+            Oefenen
           </button>
         </nav>
 
         <div className="premium-user">
           <UserRound aria-hidden="true" />
-          <span>{userEmail ?? 'Ingelogd'}</span>
+          <span>{displayName}</span>
           <button aria-label="Uitloggen" onClick={onLogOut} type="button">
             <LogOut aria-hidden="true" />
           </button>
@@ -223,7 +228,7 @@ export const HomeScreen = ({
               type="button"
             >
               <Play aria-hidden="true" />
-              Start sessie
+              Start oefening
             </button>
           </section>
 
@@ -265,7 +270,7 @@ export const HomeScreen = ({
                       <small>{label}</small>
                       <strong>{lesson.title}</strong>
                       <span>{detail}</span>
-                      <em>{lesson.id === selectedLessonId ? 'Geselecteerd' : 'Klik om te kiezen'}</em>
+                      <em>{lesson.id === selectedLessonId ? 'Geselecteerd' : 'Selecteer'}</em>
                     </button>
                   ))}
                 </div>
@@ -414,7 +419,7 @@ export const HomeScreen = ({
               <div className="pro-panel-content">
                 <div className="pro-panel-header">
                   <span>Studio</span>
-                  <strong>Hoe je vandaag wilt oefenen</strong>
+                  <strong>Account, voortgang en weergave</strong>
                 </div>
                 <div className="pro-studio-board">
                   <article className="pro-studio-card pro-studio-profile">
@@ -422,10 +427,10 @@ export const HomeScreen = ({
                       <UserRound aria-hidden="true" />
                     </div>
                     <small>Account</small>
-                    <strong className="pro-account-name" title={userEmail ?? 'Ingelogd'}>
-                      {accountName || 'Ingelogd'}
+                    <strong className="pro-account-name" title={displayName}>
+                      {displayName}
                     </strong>
-                    <span className="pro-account-email">{accountDomain ? `@${accountDomain}` : 'Privestudio actief'}</span>
+                    <span className="pro-account-email">Privéprofiel actief</span>
                     <button onClick={onLogOut} type="button">Uitloggen</button>
                   </article>
 
@@ -439,18 +444,31 @@ export const HomeScreen = ({
                     </div>
                   </article>
 
-                  <article className="pro-studio-card">
-                    <Mic aria-hidden="true" />
-                    <small>Luisteren</small>
-                    <strong>Microfoon-feedback</strong>
-                    <span>Voor toonherkenning bij noten en melodieen.</span>
-                  </article>
-
-                  <article className="pro-studio-card">
-                    <Hand aria-hidden="true" />
-                    <small>Handmatig</small>
-                    <strong>Zelf doorstappen</strong>
-                    <span>Voor akkoorden, rusten en lastigere passages.</span>
+                  <article className="pro-studio-card pro-display-profile">
+                    <SlidersHorizontal aria-hidden="true" />
+                    <small>Weergave</small>
+                    <strong>{practiceProfile === 'ipad-light' ? 'iPad 9.7 light' : 'Premium'}</strong>
+                    <span>
+                      {practiceProfile === 'ipad-light'
+                        ? 'Lichter, rustiger en sneller voor oudere tablets.'
+                        : 'Volle visuele laag voor moderne schermen.'}
+                    </span>
+                    <div className="pro-profile-toggle" role="group" aria-label="Weergaveprofiel">
+                      <button
+                        className={practiceProfile === 'premium' ? 'active' : ''}
+                        onClick={() => onPracticeProfileChange('premium')}
+                        type="button"
+                      >
+                        Premium
+                      </button>
+                      <button
+                        className={practiceProfile === 'ipad-light' ? 'active' : ''}
+                        onClick={() => onPracticeProfileChange('ipad-light')}
+                        type="button"
+                      >
+                        iPad light
+                      </button>
+                    </div>
                   </article>
 
                   <article className="pro-studio-card">

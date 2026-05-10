@@ -4,6 +4,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
+  updateProfile,
   type User,
 } from 'firebase/auth';
 import { auth, hasFirebaseConfig } from '../lib/firebase';
@@ -13,7 +14,7 @@ type AuthState = {
   loading: boolean;
   error: string;
   signIn: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, username: string) => Promise<void>;
   logOut: () => Promise<void>;
 };
 
@@ -66,15 +67,25 @@ export const useAuth = (): AuthState => {
     }
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string, username: string) => {
     if (!auth || !hasFirebaseConfig) {
       setError('Vul eerst je Firebase environment variables in.');
       return;
     }
 
+    const displayName = username.trim();
+    if (displayName.length < 2) {
+      setError('Kies een gebruikersnaam van minimaal 2 tekens.');
+      return;
+    }
+
     setError('');
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const credentials = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(credentials.user, {
+        displayName,
+      });
+      setUser(credentials.user);
     } catch (caught) {
       setError(authErrorMessage(caught));
     }

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, Hand, Mic, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, Hand, Mic, Pause, Play, RotateCcw } from 'lucide-react';
 import { prettyKeys } from '../data/piano';
+import { createScoreTimeline } from '../music/scoreTimeline';
+import { useScoreTransport } from '../music/useScoreTransport';
 import { PremiumKeyboard } from './PremiumKeyboard';
 import { ScoreRenderer } from './ScoreRenderer';
-import type { FeedbackState, LearningMode, Lesson, LessonStep, PianoKeyName } from '../types';
+import type { FeedbackState, LearningMode, Lesson, LessonStep, PianoKeyName, PracticeProfile } from '../types';
 
 type PracticeScreenProps = {
   lesson: Lesson;
@@ -21,27 +23,12 @@ type PracticeScreenProps = {
   onPreviousStep: () => void;
   onNextStep: () => void;
   onRestart: () => void;
+  onTransportStepChange: (stepIndex: number) => void;
+  onTransportComplete: () => void;
+  practiceProfile: PracticeProfile;
 };
 
-const durationBeats = (duration = 'q') => {
-  if (duration === 'w') {
-    return 4;
-  }
-
-  if (duration === 'h') {
-    return 2;
-  }
-
-  if (duration === '8') {
-    return 0.5;
-  }
-
-  if (duration === '16') {
-    return 0.25;
-  }
-
-  return 1;
-};
+const compactModuleName = (module: string) => module.replace(/^\d+\.\s*/, '');
 
 export const PracticeScreen = ({
   lesson,
@@ -59,11 +46,27 @@ export const PracticeScreen = ({
   onPreviousStep,
   onNextStep,
   onRestart,
+  onTransportStepChange,
+  onTransportComplete,
+  practiceProfile,
 }: PracticeScreenProps) => {
   const [scorePlaying, setScorePlaying] = useState(false);
   const [scoreSpeed, setScoreSpeed] = useState(75);
-  const [scoreStepProgress, setScoreStepProgress] = useState(0);
+  const timeline = useMemo(() => createScoreTimeline(lesson), [lesson]);
+  const transport = useScoreTransport({
+    timeline,
+    playing: scorePlaying,
+    speedPercent: scoreSpeed,
+    activeStepIndex: stepIndex,
+    disabled: completed,
+    onStepChange: onTransportStepChange,
+    onEnd: () => {
+      setScorePlaying(false);
+      onTransportComplete();
+    },
+  });
   const progress = ((stepIndex + 1) / lesson.steps.length) * 100;
+  const timelineProgress = Math.max(progress, transport.totalProgress);
   const currentKeys = step.keys.length > 0 ? prettyKeys(step.keys) : 'rust';
   const featuredKey = step.expectedNote ?? step.keys[0];
   const hand = step.hand ?? step.notes?.find((note) => note.hand)?.hand;
@@ -77,15 +80,6 @@ export const PracticeScreen = ({
     fingerLabel ? `vinger ${fingerLabel}` : '',
     step.count ? `tel ${step.count}` : '',
   ].filter(Boolean).join(' · ');
-  const coachTip =
-    completed
-      ? 'Je voortgang is opgeslagen. Kies straks de volgende les of herhaal deze rustig.'
-      : step.coaching ??
-        (step.recognitionMode === 'chord'
-          ? 'Laat de tonen tegelijk landen en luister of het akkoord rustig klinkt.'
-          : isRestStep
-            ? 'Blijf meetellen zonder een toets te spelen.'
-            : techniqueLabel || 'Kijk naar het blad en speel rustig door.');
   const feedbackCopy =
     completed
       ? 'Les afgerond'
@@ -103,179 +97,139 @@ export const PracticeScreen = ({
     warning: 'Let op',
     error: 'Nog eens',
   }[feedback.tone];
-  const autoPlayerAvailable =
-    lesson.level !== 'starter' ||
-    lesson.module.includes('Eerste melodieen') ||
-    lesson.module.includes('Repertoire') ||
-    lesson.module.includes('Klassieke') ||
-    lesson.module.includes('Minimalistische');
-  const stepDurationMs = useMemo(() => {
-    const tempo = lesson.tempo ?? 72;
-    const stepNotes = step.notes?.length ? step.notes : [];
-    const duration = stepNotes[0]?.duration ?? step.duration ?? 'q';
-    const beatMs = 60000 / tempo;
-
-    return (durationBeats(duration) * beatMs) / (scoreSpeed / 100);
-  }, [lesson.tempo, scoreSpeed, step.duration, step.notes]);
-  const playheadStepIndex = autoPlayerAvailable && scorePlaying ? stepIndex + scoreStepProgress : stepIndex;
-
+  const practiceModeLabel = timeline.autoPlayable ? 'Meespelen' : mode === 'listen' ? 'Wait mode' : 'Eigen tempo';
+  const statusCopy =
+    feedback.tone === 'success' || feedback.tone === 'error' || feedback.tone === 'warning'
+      ? feedback.message
+      : timeline.autoPlayable
+        ? 'Start de speler wanneer je klaarzit. Verlaag de snelheid voor controle.'
+        : mode === 'listen'
+          ? isListening
+            ? 'De app wacht op de juiste noot.'
+            : 'Microfoon wordt gestart.'
+          : 'Speel op je piano en stap zelf door.';
   useEffect(() => {
-    setScoreStepProgress(0);
-  }, [lesson.id, stepIndex]);
-
-  useEffect(() => {
-    if (!autoPlayerAvailable || !scorePlaying || completed) {
-      return undefined;
-    }
-
-    let frame = 0;
-    const startedAt = performance.now();
-
-    const tick = (now: number) => {
-      const nextProgress = Math.min(1, (now - startedAt) / stepDurationMs);
-      setScoreStepProgress(nextProgress);
-
-      if (nextProgress >= 1) {
-        setScoreStepProgress(0);
-        if (stepIndex >= lesson.steps.length - 1) {
-          setScorePlaying(false);
-        }
-        onNextStep();
-        return;
-      }
-
-      frame = requestAnimationFrame(tick);
-    };
-
-    frame = requestAnimationFrame(tick);
-
-    return () => cancelAnimationFrame(frame);
-  }, [autoPlayerAvailable, completed, lesson.steps.length, onNextStep, scorePlaying, stepDurationMs, stepIndex]);
-
-  useEffect(() => {
-    if (!autoPlayerAvailable || completed) {
+    if (!timeline.autoPlayable || completed) {
       setScorePlaying(false);
     }
-  }, [autoPlayerAvailable, completed]);
+  }, [completed, timeline.autoPlayable]);
+
+  const handlePreviousStep = () => {
+    setScorePlaying(false);
+    onPreviousStep();
+  };
+
+  const handleNextStep = () => {
+    setScorePlaying(false);
+    onNextStep();
+  };
+
+  const handleRestart = () => {
+    setScorePlaying(false);
+    onRestart();
+  };
 
   return (
-    <section className="premium-stage premium-live-stage premium-practice-live pro-practice-live" aria-label="Oefenmodus">
-      <header className="premium-practice-top pro-practice-top">
-        <button className="premium-round" onClick={onBackHome} type="button" aria-label="Terug naar menu">
+    <section
+      className={`premium-stage premium-live-stage premium-practice-live pro-practice-live learning-player profile-${practiceProfile}`}
+      aria-label="Oefenmodus"
+    >
+      <header className="player-topbar">
+        <button className="player-icon-button" onClick={onBackHome} type="button" aria-label="Terug naar menu">
           <ChevronLeft aria-hidden="true" />
         </button>
-        <div>
-          <span>{lesson.module}</span>
+
+        <div className="player-title">
+          <span>{compactModuleName(lesson.module)}</span>
           <strong>{lesson.title}</strong>
         </div>
 
-        <div className="premium-mode-cluster" role="group" aria-label="Leermodus">
+        <div className="player-mode-toggle" role="group" aria-label="Leermodus">
           <button
-            className={mode === 'listen' ? 'listening' : ''}
+            className={mode === 'listen' ? 'active' : ''}
             onClick={() => onModeChange('listen')}
             type="button"
           >
             <Mic aria-hidden="true" />
-            Luisteren
+            <span>Luisteren</span>
             {mode === 'listen' && isListening ? <i aria-label="Microfoon actief" /> : null}
           </button>
           <button
-            className={mode === 'manual' ? 'listening' : ''}
+            className={mode === 'manual' ? 'active' : ''}
             onClick={() => onModeChange('manual')}
             type="button"
           >
             <Hand aria-hidden="true" />
-            Handmatig
+            <span>Handmatig</span>
           </button>
         </div>
       </header>
 
-      <div className="premium-progress" aria-label="Lesvoortgang">
-        <span style={{ width: `${progress}%` }} />
+      <div className="player-progress" aria-label="Lesvoortgang">
+        <span style={{ width: `${timelineProgress}%` }} />
       </div>
 
-      <div className="pro-practice-reader">
-        <section className="premium-score pro-score-full pro-score-sheet" aria-label="Bladmuziek">
-          <div className="pro-sheet-coach">
-            <div className="pro-sheet-step">
-              <span>Stap {stepIndex + 1}/{lesson.steps.length}</span>
-              <strong>{completed ? 'Les afgerond' : `${goalVerb} ${goalLabel}`}</strong>
-              <p>{coachTip}</p>
-            </div>
-
-            <div className="pro-sheet-facts" aria-label="Speelgegevens">
-              <div>
-                <small>Techniek</small>
-                <strong>{techniqueLabel || 'Rustig spelen'}</strong>
-              </div>
-              <div>
-                <small>{feedbackLabel}</small>
-                <strong>{feedbackCopy}</strong>
-              </div>
-              <div className={`pro-inline-status ${feedback.tone}`}>
-                <i aria-hidden="true" />
-                <strong>{featuredKey ? featuredKey.replace('#', '♯') : 'Rust'}</strong>
-                <span>
-                  {detectedNote
-                    ? `${mode === 'manual' ? 'Gekozen' : 'Gehoord'}: ${detectedNote.replace('#', '♯')}`
-                    : mode === 'manual'
-                      ? 'Eigen tempo'
-                      : isListening
-                        ? 'Microfoon actief'
-                        : 'Microfoon starten'}
-                </span>
-              </div>
-            </div>
-
-            {autoPlayerAvailable ? (
-              <div className="pro-speed-control">
-                <button onClick={() => setScorePlaying((value) => !value)} type="button">
-                  {scorePlaying ? 'Pauze' : 'Start'}
-                </button>
-                <input
-                  aria-label="Scoresnelheid"
-                  max="120"
-                  min="50"
-                  onChange={(event) => setScoreSpeed(Number(event.target.value))}
-                  step="5"
-                  type="range"
-                  value={scoreSpeed}
-                />
-              </div>
-            ) : (
-              <small className="pro-sheet-wait">Kijk, speel, ga door in je eigen tempo</small>
-            )}
+      <main className="player-stage">
+        <section className="player-sheet" aria-label="Bladmuziek">
+          <div className="player-score-frame">
+            <ScoreRenderer
+              feedbackTone={feedback.tone}
+              activeStepIndex={stepIndex}
+              currentBeat={transport.currentBeat}
+              timeline={timeline}
+            />
           </div>
-
-          <ScoreRenderer
-            feedbackTone={feedback.tone}
-            playheadStepIndex={playheadStepIndex}
-            stepIndex={stepIndex}
-            steps={lesson.steps}
-            timeSignature={lesson.timeSignature}
-          />
         </section>
-      </div>
+      </main>
 
-      <div className="premium-practice-controls pro-practice-controls">
-        <button disabled={!canGoBack} onClick={onPreviousStep} type="button">
+      <div className="player-transport" aria-label="Oefenbediening">
+        <div className={`player-compact-cue ${feedback.tone}`}>
+          <i aria-hidden="true" />
+          <span>{practiceModeLabel} · stap {stepIndex + 1}/{lesson.steps.length}</span>
+          <strong>{completed ? 'Les afgerond' : `${goalVerb} ${goalLabel}`}</strong>
+          <small>{statusCopy}</small>
+        </div>
+
+        <button disabled={!canGoBack} onClick={handlePreviousStep} type="button">
           <ArrowLeft aria-hidden="true" />
-          Vorige
+          <span>Vorige</span>
         </button>
-        <button onClick={onRestart} type="button">
+        <button onClick={handleRestart} type="button">
           <RotateCcw aria-hidden="true" />
-          Opnieuw
+          <span>Opnieuw</span>
         </button>
-        <button onClick={onNextStep} type="button">
+        <button className="primary" onClick={handleNextStep} type="button">
           {completed ? <Check aria-hidden="true" /> : <ArrowRight aria-hidden="true" />}
-          {completed ? 'Klaar' : 'Volgende'}
+          <span>{completed ? 'Klaar' : 'Volgende'}</span>
         </button>
+
+        {timeline.autoPlayable ? (
+          <div className="player-speed compact">
+            <button onClick={() => setScorePlaying((value) => !value)} type="button">
+              {scorePlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+              <span>{scorePlaying ? 'Pauze' : 'Start'}</span>
+            </button>
+            <strong>{scoreSpeed}%</strong>
+            <input
+              aria-label="Scoresnelheid"
+              max="120"
+              min="50"
+              onChange={(event) => setScoreSpeed(Number(event.target.value))}
+              step="5"
+              type="range"
+              value={scoreSpeed}
+            />
+          </div>
+        ) : (
+          <span className="player-tempo-pill">{feedback.tone === 'idle' ? techniqueLabel || 'Rustig spelen' : `${feedbackLabel}: ${feedbackCopy}`}</span>
+        )}
       </div>
 
       <PremiumKeyboard
         detectedKey={detectedNote}
         disabled={completed || mode !== 'manual'}
         expectedKey={step.expectedNote}
+        feedbackTone={feedback.tone}
         lessonKeys={step.keys}
         onKeyPress={onKeyPress}
       />

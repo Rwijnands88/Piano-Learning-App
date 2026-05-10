@@ -79,6 +79,8 @@ export type ProgressRecord = {
 
 export type LearningMode = 'listen' | 'manual';
 
+export type PracticeProfile = 'premium' | 'ipad-light';
+
 export type FeedbackState = {
   tone: 'idle' | 'listening' | 'success' | 'warning' | 'error';
   message: string;

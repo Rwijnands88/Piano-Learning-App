@@ -2,6 +2,8 @@ import { Piano, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AuthScreen } from './components/AuthScreen';
 import { HomeScreen } from './components/HomeScreen';
+import { LessonCompleteScreen } from './components/LessonCompleteScreen';
+import { LessonIntroScreen } from './components/LessonIntroScreen';
 import { PracticeScreen } from './components/PracticeScreen';
 import { useAuth } from './hooks/useAuth';
 import { useLessons } from './hooks/useLessons';
@@ -10,11 +12,21 @@ import { useProgress } from './hooks/useProgress';
 import { hasFirebaseConfig } from './lib/firebase';
 import { playPianoNote } from './lib/pianoSynth';
 import { preloadVexFlow } from './lib/vexflowLoader';
-import type { FeedbackState, LearningMode, PianoKeyName } from './types';
+import type { FeedbackState, LearningMode, PianoKeyName, PracticeProfile } from './types';
 
 const initialFeedback: FeedbackState = {
   tone: 'idle',
   message: 'Kies een les. Tijdens het oefenen zie je steeds een kort speeldoel.',
+};
+
+const storedPracticeProfile = (): PracticeProfile => {
+  const stored = window.localStorage.getItem('practice-profile');
+  if (stored === 'ipad-light' || stored === 'premium') {
+    return stored;
+  }
+
+  const compactTablet = window.innerWidth <= 1100 && window.innerHeight <= 820 && window.matchMedia('(pointer: coarse)').matches;
+  return compactTablet ? 'ipad-light' : 'premium';
 };
 
 const LearningApp = () => {
@@ -23,8 +35,9 @@ const LearningApp = () => {
   const progress = useProgress(auth.user?.uid);
   const [selectedLessonId, setSelectedLessonId] = useState('');
   const [stepIndex, setStepIndex] = useState(0);
-  const [screen, setScreen] = useState<'home' | 'practice'>('home');
+  const [screen, setScreen] = useState<'home' | 'intro' | 'practice' | 'complete'>('home');
   const [mode, setMode] = useState<LearningMode>('listen');
+  const [practiceProfile, setPracticeProfile] = useState<PracticeProfile>(storedPracticeProfile);
   const [feedback, setFeedback] = useState<FeedbackState>(initialFeedback);
   const [manualDetectedNote, setManualDetectedNote] = useState<PianoKeyName | null>(null);
   const [completedSessionLessons, setCompletedSessionLessons] = useState<Set<string>>(new Set());
@@ -48,14 +61,26 @@ const LearningApp = () => {
 
   const currentStep = selectedLesson?.steps[Math.min(stepIndex, Math.max(selectedLesson.steps.length - 1, 0))];
   const expectedStepNote = currentStep?.expectedNote ?? currentStep?.keys[0];
+  const canMatchWithMicrophone =
+    currentStep?.recognitionMode !== 'manual-score' &&
+    currentStep?.recognitionMode !== 'chord' &&
+    Boolean(expectedStepNote);
   const lessonCompleted = Boolean(selectedLesson && completedSessionLessons.has(selectedLesson.id));
+  const nextLesson = lessons[selectedLessonIndex + 1];
   const displayedCompletedLessonIds = useMemo(
     () => new Set([...progress.completedLessonIds, ...completedSessionLessons]),
     [completedSessionLessons, progress.completedLessonIds],
   );
 
-  const pitch = usePitchDetection(mode, Boolean(auth.user && currentStep && !lessonCompleted && screen === 'practice'));
+  const pitch = usePitchDetection(
+    mode,
+    Boolean(auth.user && currentStep && canMatchWithMicrophone && !lessonCompleted && screen === 'practice'),
+  );
   const displayedDetectedNote = mode === 'manual' ? manualDetectedNote : pitch.detectedNote;
+
+  useEffect(() => {
+    window.localStorage.setItem('practice-profile', practiceProfile);
+  }, [practiceProfile]);
 
   const changeMode = (nextMode: LearningMode) => {
     if (nextMode === 'listen') {
@@ -68,7 +93,7 @@ const LearningApp = () => {
     setMode(nextMode);
   };
 
-  const startPractice = (lessonId = selectedLesson?.id) => {
+  const openLessonIntro = (lessonId = selectedLesson?.id) => {
     const lessonToStart = lessons.find((lesson) => lesson.id === lessonId) ?? selectedLesson;
 
     if (lessonToStart) {
@@ -84,6 +109,19 @@ const LearningApp = () => {
     lastAcceptedNoteRef.current = '';
     setManualDetectedNote(null);
     setFeedback(initialFeedback);
+    preloadVexFlow();
+    setScreen('intro');
+  };
+
+  const beginPractice = () => {
+    if (!selectedLesson) {
+      return;
+    }
+
+    setStepIndex(0);
+    lastAcceptedNoteRef.current = '';
+    setManualDetectedNote(null);
+    setFeedback({ tone: 'idle', message: 'Oefening gestart.' });
     preloadVexFlow();
     setScreen('practice');
   };
@@ -105,6 +143,8 @@ const LearningApp = () => {
       message:
         currentStep.recognitionMode === 'manual-score' || !expectedStepNote
           ? 'Lees de rust of telstap en ga verder wanneer je klaar bent.'
+          : currentStep.recognitionMode === 'chord'
+            ? 'Akkoorden worden visueel begeleid. Speel het akkoord en ga verder wanneer het goed voelt.'
           : pitch.isListening
             ? 'Luistert naar je piano.'
             : 'Microfoon wordt gestart...',
@@ -112,7 +152,15 @@ const LearningApp = () => {
   }, [currentStep, expectedStepNote, lessonCompleted, mode, pitch.isListening, screen, selectedLessonId, stepIndex]);
 
   useEffect(() => {
-    if (!currentStep || mode !== 'listen' || !pitch.detectedNote || !expectedStepNote || lessonCompleted || screen !== 'practice') {
+    if (
+      !currentStep ||
+      mode !== 'listen' ||
+      !pitch.detectedNote ||
+      !expectedStepNote ||
+      !canMatchWithMicrophone ||
+      lessonCompleted ||
+      screen !== 'practice'
+    ) {
       return;
     }
 
@@ -134,7 +182,17 @@ const LearningApp = () => {
         message: `${pitch.detectedNote.replace('#', '♯')} gehoord. Probeer ${expectedStepNote.replace('#', '♯')}.`,
       });
     }
-  }, [currentStep, expectedStepNote, lessonCompleted, mode, pitch.detectedNote, screen, selectedLesson?.id, stepIndex]);
+  }, [
+    canMatchWithMicrophone,
+    currentStep,
+    expectedStepNote,
+    lessonCompleted,
+    mode,
+    pitch.detectedNote,
+    screen,
+    selectedLesson?.id,
+    stepIndex,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -163,6 +221,28 @@ const LearningApp = () => {
     await progress.resetAll();
   };
 
+  const setPracticeStep = (nextStepIndex: number) => {
+    if (!selectedLesson) {
+      return;
+    }
+
+    const boundedStep = Math.max(0, Math.min(nextStepIndex, selectedLesson.steps.length - 1));
+    setStepIndex(boundedStep);
+  };
+
+  const completeCurrentLesson = () => {
+    if (!selectedLesson || lessonCompleted) {
+      setScreen('complete');
+      return;
+    }
+
+    setManualDetectedNote(null);
+    lastAcceptedNoteRef.current = '';
+    markLessonCompleted(selectedLesson.id);
+    setFeedback({ tone: 'success', message: 'Les afgerond. Je voortgang is opgeslagen.' });
+    setScreen('complete');
+  };
+
   const openLesson = (lessonId: string, nextFeedback = initialFeedback) => {
     setSelectedLessonId(lessonId);
     setStepIndex(0);
@@ -184,31 +264,14 @@ const LearningApp = () => {
     }
 
     if (lessonCompleted) {
-      const nextLesson = lessons[selectedLessonIndex + 1];
-      if (nextLesson) {
-        openLesson(nextLesson.id, {
-          tone: 'idle',
-          message: `Volgende les staat klaar: ${nextLesson.title}.`,
-        });
-      } else {
-        setScreen('home');
-        setFeedback(initialFeedback);
-      }
+      setScreen('complete');
       return;
     }
 
     if (stepIndex >= selectedLesson.steps.length - 1) {
       markLessonCompleted(selectedLesson.id);
-      const nextLesson = lessons[selectedLessonIndex + 1];
-
-      if (nextLesson) {
-        openLesson(nextLesson.id, {
-          tone: 'success',
-          message: `Les afgerond. Door naar: ${nextLesson.title}.`,
-        });
-      } else {
-        setFeedback({ tone: 'success', message: 'Leerlijn afgerond. Mooi werk.' });
-      }
+      setFeedback({ tone: 'success', message: 'Les afgerond. Je voortgang is opgeslagen.' });
+      setScreen('complete');
       return;
     }
 
@@ -220,11 +283,6 @@ const LearningApp = () => {
 
   const selectLesson = (lessonId: string) => {
     openLesson(lessonId);
-    setCompletedSessionLessons((items) => {
-      const next = new Set(items);
-      next.delete(lessonId);
-      return next;
-    });
   };
 
   const restartLesson = () => {
@@ -239,6 +297,21 @@ const LearningApp = () => {
         return next;
       });
     }
+  };
+
+  const repeatLesson = () => {
+    if (selectedLesson) {
+      openLessonIntro(selectedLesson.id);
+    }
+  };
+
+  const openNextLessonIntro = () => {
+    if (nextLesson) {
+      openLessonIntro(nextLesson.id);
+      return;
+    }
+
+    setScreen('home');
   };
 
   const handleManualKeyPress = (note: PianoKeyName) => {
@@ -293,7 +366,7 @@ const LearningApp = () => {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-practice-profile={practiceProfile}>
       <div className="portrait-gate">
         <Piano aria-hidden="true" />
         <strong>Draai je tablet naar landscape</strong>
@@ -322,12 +395,32 @@ const LearningApp = () => {
           onPreparePractice={preloadVexFlow}
           onResetAllProgress={resetAllProgress}
           onResetLessonProgress={resetLessonProgress}
+          onPracticeProfileChange={setPracticeProfile}
           onSelectLesson={selectLesson}
-          onStartLesson={startPractice}
-          onStartPractice={startPractice}
+          onStartLesson={openLessonIntro}
+          onStartPractice={() => openLessonIntro()}
+          practiceProfile={practiceProfile}
           selectedLessonId={selectedLesson.id}
           source={source}
-          userEmail={auth.user.email}
+          userName={auth.user.displayName}
+        />
+      ) : screen === 'intro' ? (
+        <LessonIntroScreen
+          lesson={selectedLesson}
+          mode={mode}
+          onBackHome={() => setScreen('home')}
+          onModeChange={changeMode}
+          onStart={beginPractice}
+        />
+      ) : screen === 'complete' ? (
+        <LessonCompleteScreen
+          completedCount={displayedCompletedLessonIds.size}
+          lesson={selectedLesson}
+          nextLesson={nextLesson}
+          onBackHome={() => setScreen('home')}
+          onNextLesson={openNextLessonIntro}
+          onRepeat={repeatLesson}
+          totalLessons={lessons.length}
         />
       ) : (
         <PracticeScreen
@@ -348,6 +441,9 @@ const LearningApp = () => {
             setStepIndex((index) => Math.max(0, index - 1));
           }}
           onRestart={restartLesson}
+          onTransportComplete={completeCurrentLesson}
+          onTransportStepChange={setPracticeStep}
+          practiceProfile={practiceProfile}
           step={currentStep}
           stepIndex={stepIndex}
         />

@@ -1,10 +1,11 @@
 import { pianoKeys, whiteKeys } from '../data/piano';
-import type { PianoKeyName } from '../types';
+import type { FeedbackState, PianoKeyName } from '../types';
 
 type PremiumKeyboardProps = {
   lessonKeys: PianoKeyName[];
   detectedKey: PianoKeyName | null;
   expectedKey?: PianoKeyName;
+  feedbackTone?: FeedbackState['tone'];
   disabled?: boolean;
   onKeyPress?: (note: PianoKeyName) => void;
 };
@@ -17,12 +18,19 @@ const blackOffsets: Record<string, number> = {
   'A#': 5.72,
 };
 
-export const PremiumKeyboard = ({ lessonKeys, detectedKey, expectedKey, disabled = false, onKeyPress }: PremiumKeyboardProps) => {
+export const PremiumKeyboard = ({
+  lessonKeys,
+  detectedKey,
+  expectedKey,
+  feedbackTone = 'idle',
+  disabled = false,
+  onKeyPress,
+}: PremiumKeyboardProps) => {
   const lessonSet = new Set(lessonKeys);
   const canPlay = Boolean(onKeyPress) && !disabled;
 
   return (
-    <div className="premium-keys" aria-label="Piano toetsenbord">
+    <div className={`premium-keys feedback-${feedbackTone}`} aria-label="Piano toetsenbord">
       <div className="premium-white-row">
         {whiteKeys.map((key) => {
           const classes = [
