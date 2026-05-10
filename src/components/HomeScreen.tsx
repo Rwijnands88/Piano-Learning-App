@@ -79,18 +79,51 @@ const levelLabel = {
 
 const profileCopy = {
   premium: {
-    title: 'Concert dark',
-    text: 'Donker, goud en vol contrast voor normale tablets en desktop.',
+    title: 'Neon dark',
+    text: 'Diep donker, helder neon en veel contrast voor tablet en desktop.',
   },
   'ivory-light': {
-    title: 'Ivory light',
-    text: 'Lichter, stiller en prettig bij daglicht.',
+    title: 'Clean light',
+    text: 'Lichter canvas met dezelfde cockpit-structuur.',
   },
   'ipad-light': {
-    title: 'iPad 9.7 light',
-    text: 'Sneller en rustiger voor oudere tablets.',
+    title: 'iPad performance',
+    text: 'Minder effecten, sneller en rustiger voor oudere tablets.',
   },
 } satisfies Record<PracticeProfile, { title: string; text: string }>;
+
+const panelMeta = {
+  today: {
+    eyebrow: 'Dagmissie',
+    title: 'Kies je volgende speelmoment',
+    text: 'Een korte route voor vandaag, zonder zoeken of parkeren onderaan het scherm.',
+  },
+  path: {
+    eyebrow: 'Leerlijn',
+    title: 'Speel door je route',
+    text: 'Modules lopen horizontaal door als levels. Alles is direct te starten vanuit de route.',
+  },
+  repertoire: {
+    eyebrow: 'Bibliotheek',
+    title: 'Stukken die als muziek voelen',
+    text: 'Repertoire met langere sessies, herkenbare melodieen en duidelijke voortgang.',
+  },
+  workouts: {
+    eyebrow: 'Training',
+    title: 'Snelle drills voor techniek',
+    text: 'Gerichte oefeningen voor noten lezen, timing, handvorm en spiergeheugen.',
+  },
+  growth: {
+    eyebrow: 'Groei',
+    title: 'Bekijk je ontwikkeling',
+    text: 'Badges, vaardigheden en mijlpalen zonder dat het je oefenflow onderbreekt.',
+  },
+  studio: {
+    eyebrow: 'Studio',
+    title: 'Profiel en instellingen',
+    text: 'Weergave, reset en account staan bij elkaar, los van het oefenen zelf.',
+  },
+} satisfies Record<HomePanel, { eyebrow: string; title: string; text: string }>;
 
 export const HomeScreen = ({
   lessons,
@@ -282,73 +315,24 @@ export const HomeScreen = ({
     }
   };
 
+  const currentPanel = panelMeta[activePanel];
+  const NextAchievementIcon = nextAchievement.icon;
+
   return (
-    <section className="premium-stage premium-live-stage premium-home-live" aria-label="Startscherm">
-      <header className="premium-app-top pro-app-top">
-        <div className="premium-brand">
-          <span><Piano aria-hidden="true" /></span>
-          <div>
-            <small>Piano Studio</small>
-            <strong>Practice Hub</strong>
-          </div>
-        </div>
-
-        <nav aria-label="Snelle acties">
-          <button className={activePanel === 'today' ? 'active' : ''} onClick={() => setActivePanel('today')} type="button">
-            Vandaag
-          </button>
-          <button
-            onClick={() => (featuredLesson ? startLesson(featuredLesson.id) : onStartPractice())}
-            onFocus={onPreparePractice}
-            onPointerEnter={onPreparePractice}
-            type="button"
-          >
-            Oefenen
-          </button>
-        </nav>
-
-        <div className="premium-user">
-          <UserRound aria-hidden="true" />
-          <span>{displayName}</span>
-          <button aria-label="Uitloggen" onClick={onLogOut} type="button">
-            <LogOut aria-hidden="true" />
-          </button>
-        </div>
-      </header>
-
-      <div className="premium-glass pro-learning-shell">
-        <div className="premium-home-screen pro-learning-home">
-          <section className="premium-hero-panel pro-home-hero">
-            <span className="premium-kicker">{sourceLabel[source]}</span>
-            <h1>Practice Hub</h1>
-            <p>Een duidelijke route: dagmissie, leerlijn, repertoire en groei. Geen losse selectie meer, elke kaart brengt je direct naar de oefening.</p>
-
-            <div className="pro-hero-focus">
-              <small>Volgende stap</small>
-              <strong>{featuredLesson?.title ?? 'Vrij spelen'}</strong>
-              <span>{featuredLesson ? `${compactModuleName(featuredLesson.module)} · ${featuredLesson.estimatedMinutes ?? 8} min` : 'Kies een les'}</span>
+    <section className="premium-stage premium-live-stage premium-home-live neo-home" aria-label="Startscherm">
+      <div className="neo-shell">
+        <aside className="neo-sidebar" aria-label="Hoofdmenu">
+          <div className="neo-brand">
+            <span><Piano aria-hidden="true" /></span>
+            <div>
+              <small>Piano Lab</small>
+              <strong>Neon Studio</strong>
             </div>
+          </div>
 
-            <button
-              className="premium-primary"
-              onClick={() => (featuredLesson ? startLesson(featuredLesson.id) : onStartPractice())}
-              onFocus={onPreparePractice}
-              onPointerEnter={onPreparePractice}
-              type="button"
-            >
-              <Play aria-hidden="true" />
-              Ga verder
-            </button>
-          </section>
-
-          <div className="premium-menu-rail pro-menu-rail" aria-label="Hoofdmenu">
+          <nav className="neo-nav" aria-label="Studio menu">
             {panelItems.map(({ id, title, subtitle, icon: Icon }) => (
-              <button
-                className={activePanel === id ? 'premium-menu-action active' : 'premium-menu-action'}
-                key={id}
-                onClick={() => setActivePanel(id)}
-                type="button"
-              >
+              <button className={activePanel === id ? 'active' : ''} key={id} onClick={() => setActivePanel(id)} type="button">
                 <Icon aria-hidden="true" />
                 <span>
                   <strong>{title}</strong>
@@ -356,106 +340,133 @@ export const HomeScreen = ({
                 </span>
               </button>
             ))}
-          </div>
+          </nav>
 
-          <section
-            className={activePanel === 'studio' ? 'premium-home-panel pro-home-panel pro-home-panel-studio' : 'premium-home-panel pro-home-panel'}
-            aria-label="Menu-inhoud"
+          <button
+            className="neo-continue"
+            onClick={() => (featuredLesson ? startLesson(featuredLesson.id) : onStartPractice())}
+            onFocus={onPreparePractice}
+            onPointerEnter={onPreparePractice}
+            type="button"
           >
+            <span><Play aria-hidden="true" /></span>
+            <small>Ga verder</small>
+            <strong>{featuredLesson?.title ?? 'Vrij spelen'}</strong>
+            <em>{featuredLesson ? `${compactModuleName(featuredLesson.module)} · ${featuredLesson.estimatedMinutes ?? 8} min` : 'Direct oefenen'}</em>
+          </button>
+
+          <div className="neo-account-mini">
+            <UserRound aria-hidden="true" />
+            <span title={displayName}>{displayName}</span>
+            <button aria-label="Uitloggen" onClick={onLogOut} type="button">
+              <LogOut aria-hidden="true" />
+            </button>
+          </div>
+        </aside>
+
+        <main className="neo-workspace">
+          <header className="neo-workspace-top">
+            <div>
+              <span>{currentPanel.eyebrow}</span>
+              <h1>{currentPanel.title}</h1>
+              <p>{currentPanel.text}</p>
+            </div>
+            <div className="neo-top-metrics" aria-label="Snelle voortgang">
+              <span>
+                <Sparkles aria-hidden="true" />
+                <strong>{levelScore}</strong>
+                <small>XP</small>
+              </span>
+              <span>
+                <Flame aria-hidden="true" />
+                <strong>{currentStreak}</strong>
+                <small>streak</small>
+              </span>
+              <span>
+                <Target aria-hidden="true" />
+                <strong>{completionPercent}%</strong>
+                <small>route</small>
+              </span>
+            </div>
+          </header>
+
+          <section className="neo-scene" aria-label="Menu-inhoud">
             {activePanel === 'today' ? (
-              <div className="pro-panel-content">
-                <div className="pro-panel-header pro-panel-header-split">
+              <div className="neo-panel neo-today-panel">
+                <section className="neo-focus-strip">
                   <div>
-                    <span>Vandaag</span>
-                    <strong>Je oefenmissie staat klaar</strong>
+                    <small>Volgende noot op de route</small>
+                    <strong>{featuredLesson?.title ?? 'Vrij spelen'}</strong>
+                    <span>{featuredLesson ? `${compactModuleName(featuredLesson.module)} · ${featuredLesson.estimatedMinutes ?? 8} minuten` : 'Open oefenmodus'}</span>
                   </div>
-                  <div className="pro-xp-chip">
-                    <Sparkles aria-hidden="true" />
-                    <span>{levelScore} XP</span>
-                  </div>
-                </div>
-                <div className="pro-mission-brief">
-                  <div>
-                    <small>Level route</small>
-                    <strong>{completionPercent}% programma</strong>
-                    <span>{unlockedModules}/{modules.length} hoofdstukken vrijgespeeld</span>
-                  </div>
-                  <div>
-                    <small>Streak</small>
-                    <strong>{currentStreak} dagen</strong>
-                    <span>Vandaag telt als je een sessie afrondt</span>
-                  </div>
-                  <div>
-                    <small>Volgende badge</small>
-                    <strong>{nextAchievement.title}</strong>
-                    <span>{nextAchievement.detail}</span>
-                  </div>
-                </div>
-                <div className="pro-session-grid">
+                  <button
+                    onClick={() => (featuredLesson ? startLesson(featuredLesson.id) : onStartPractice())}
+                    onFocus={onPreparePractice}
+                    onPointerEnter={onPreparePractice}
+                    type="button"
+                  >
+                    <Play aria-hidden="true" />
+                    Start nu
+                  </button>
+                </section>
+
+                <section className="neo-mission-lane" aria-label="Dagplanning">
                   {todayPlan.map(({ label, lesson, detail }) => (
                     <button
-                      className={lesson.id === featuredLesson?.id ? 'pro-session-card recommended' : 'pro-session-card'}
+                      className={lesson.id === featuredLesson?.id ? 'neo-mission-tile recommended' : 'neo-mission-tile'}
                       key={`${label}-${lesson.id}`}
                       onClick={() => startLesson(lesson.id)}
                       type="button"
                     >
+                      <i aria-hidden="true" />
                       <small>{label}</small>
                       <strong>{lesson.title}</strong>
                       <span>{detail}</span>
-                      <em>{lesson.id === featuredLesson?.id ? 'Aanbevolen' : 'Start sessie'}</em>
+                      <em>{lesson.estimatedMinutes ?? 8} min</em>
                     </button>
                   ))}
-                </div>
-                <div className="pro-metric-row">
+                </section>
+
+                <section className="neo-data-ribbon" aria-label="Sessieoverzicht">
                   <div>
                     <Gauge aria-hidden="true" />
-                    <span>{completionPercent}%</span>
-                    <small>programma</small>
+                    <strong>{completionPercent}%</strong>
+                    <span>programma</span>
                   </div>
                   <div>
                     <Clock3 aria-hidden="true" />
-                    <span>{completedMinutes}/{totalMinutes}</span>
-                    <small>minuten</small>
+                    <strong>{completedMinutes}/{totalMinutes}</strong>
+                    <span>minuten</span>
                   </div>
                   <div>
-                    <Target aria-hidden="true" />
-                    <span>{completedCount}/{lessons.length}</span>
-                    <small>lessen</small>
+                    <MapIcon aria-hidden="true" />
+                    <strong>{unlockedModules}/{modules.length}</strong>
+                    <span>hoofdstukken vrij</span>
                   </div>
-                </div>
+                </section>
               </div>
             ) : null}
 
             {activePanel === 'path' ? (
-              <div className="pro-panel-content">
-                <div className="pro-panel-header pro-panel-header-split">
-                  <div>
-                    <span>Leerlijn</span>
-                    <strong>Horizontale route naar echte stukken</strong>
-                  </div>
-                  <div className="pro-xp-chip">
-                    <MapIcon aria-hidden="true" />
-                    <span>{unlockedModules} unlocks</span>
-                  </div>
-                </div>
-                <div className="pro-course-track">
+              <div className="neo-panel neo-route-panel">
+                <div className="neo-route-ribbon" aria-label="Leerlijn route">
                   {moduleSnapshots.map(({ done, firstOpen, index, lessons: moduleLessons, module, percent, status }) => {
                     const resetLesson = [...moduleLessons].reverse().find((lesson) => completedLessonIds.has(lesson.id));
 
                     return (
-                      <article className={`pro-course-island ${status}`} key={module}>
-                        <div className="pro-course-top">
+                      <article className={`neo-route-stop ${status}`} key={module}>
+                        <div className="neo-route-head">
                           <span>Hoofdstuk {index + 1}</span>
                           <em>{statusLabel[status]}</em>
                         </div>
-                        <button className="pro-course-main" onClick={() => firstOpen && startLesson(firstOpen.id)} type="button">
+                        <button className="neo-route-main" onClick={() => firstOpen && startLesson(firstOpen.id)} type="button">
                           <strong>{compactModuleName(module)}</strong>
                           <small>{firstOpen?.title ?? 'Module voltooid'}</small>
-                          <div className="pro-module-progress" aria-label={`${percent}% afgerond`}>
+                          <div className="neo-mini-progress" aria-label={`${percent}% afgerond`}>
                             <i style={{ width: `${percent}%` }} />
                           </div>
                         </button>
-                        <div className="pro-course-node-row" aria-label={`Lessen in ${compactModuleName(module)}`}>
+                        <div className="neo-route-nodes" aria-label={`Lessen in ${compactModuleName(module)}`}>
                           {moduleLessons.map((lesson, lessonIndex) => {
                             const completed = completedLessonIds.has(lesson.id);
                             const isNext = firstOpen?.id === lesson.id && status !== 'completed';
@@ -464,7 +475,7 @@ export const HomeScreen = ({
                             return (
                               <button
                                 aria-label={`${lesson.title} starten`}
-                                className={`pro-course-node ${nodeClass}`}
+                                className={`neo-route-node ${nodeClass}`}
                                 key={lesson.id}
                                 onClick={() => startLesson(lesson.id)}
                                 title={lesson.title}
@@ -475,7 +486,7 @@ export const HomeScreen = ({
                             );
                           })}
                         </div>
-                        <div className="pro-course-footer">
+                        <div className="neo-route-foot">
                           <span>{done}/{moduleLessons.length} afgerond</span>
                           <button
                             disabled={!resetLesson}
@@ -493,35 +504,26 @@ export const HomeScreen = ({
             ) : null}
 
             {activePanel === 'repertoire' ? (
-              <div className="pro-panel-content">
-                <div className="pro-panel-header pro-panel-header-split">
-                  <div>
-                    <span>Repertoire</span>
-                    <strong>Muziekbibliotheek met echte speelduur</strong>
-                  </div>
-                  <div className="pro-xp-chip">
-                    <Library aria-hidden="true" />
-                    <span>{repertoireLessons.length} stukken</span>
-                  </div>
-                </div>
-                <div className="pro-card-grid">
+              <div className="neo-panel neo-library-panel">
+                <div className="neo-library-grid">
                   {repertoireLessons.map((lesson) => {
                     const completed = completedLessonIds.has(lesson.id);
                     const isRecommended = lesson.id === recommendedPiece?.id;
 
                     return (
                       <button
-                        className={completed ? 'pro-library-card completed' : isRecommended ? 'pro-library-card recommended' : 'pro-library-card'}
+                        className={completed ? 'neo-piece-row completed' : isRecommended ? 'neo-piece-row recommended' : 'neo-piece-row'}
                         key={lesson.id}
                         onClick={() => startLesson(lesson.id)}
                         type="button"
                       >
                         <Music2 aria-hidden="true" />
-                        <span>{levelLabel[lesson.level ?? 'beginner']}</span>
-                        <strong>{lesson.title}</strong>
-                        <small>{lesson.estimatedMinutes ?? 8} min · {lesson.steps.length} stappen</small>
-                        <i>{completed ? 'Voltooid' : isRecommended ? 'Aanbevolen' : lesson.source === 'original' ? 'Origineel' : 'Traditioneel'}</i>
-                        <em className="pro-card-action">Start stuk</em>
+                        <span>
+                          <strong>{lesson.title}</strong>
+                          <small>{lesson.estimatedMinutes ?? 8} min · {lesson.steps.length} stappen</small>
+                        </span>
+                        <i>{levelLabel[lesson.level ?? 'beginner']}</i>
+                        <em>{completed ? 'Voltooid' : isRecommended ? 'Aanbevolen' : lesson.source === 'original' ? 'Origineel' : 'Traditioneel'}</em>
                       </button>
                     );
                   })}
@@ -530,24 +532,14 @@ export const HomeScreen = ({
             ) : null}
 
             {activePanel === 'workouts' ? (
-              <div className="pro-panel-content">
-                <div className="pro-panel-header pro-panel-header-split">
-                  <div>
-                    <span>Workouts</span>
-                    <strong>Arcade-achtige drills voor spiergeheugen</strong>
-                  </div>
-                  <div className="pro-xp-chip">
-                    <Flame aria-hidden="true" />
-                    <span>+120 XP</span>
-                  </div>
-                </div>
-                <div className="pro-card-grid compact">
+              <div className="neo-panel neo-workout-panel">
+                <div className="neo-workout-deck">
                   {workoutLessons.map((lesson) => {
                     const completed = completedLessonIds.has(lesson.id);
 
                     return (
                       <button
-                        className={completed ? 'pro-workout-card completed' : lesson.id === recommendedWorkout?.id ? 'pro-workout-card recommended' : 'pro-workout-card'}
+                        className={completed ? 'neo-workout-tile completed' : lesson.id === recommendedWorkout?.id ? 'neo-workout-tile recommended' : 'neo-workout-tile'}
                         key={lesson.id}
                         onClick={() => startLesson(lesson.id)}
                         type="button"
@@ -556,7 +548,6 @@ export const HomeScreen = ({
                         <strong>{lesson.title}</strong>
                         <span>{lesson.focus?.join(' · ') ?? 'training'}</span>
                         <i>{completed ? 'Claimed' : lesson.id === recommendedWorkout?.id ? 'Daily boost' : `${lesson.estimatedMinutes ?? 6} min`}</i>
-                        <em className="pro-card-action">Start training</em>
                       </button>
                     );
                   })}
@@ -565,85 +556,71 @@ export const HomeScreen = ({
             ) : null}
 
             {activePanel === 'growth' ? (
-              <div className="pro-panel-content">
-                <div className="pro-panel-header pro-panel-header-split">
-                  <div>
-                    <span>Groei</span>
-                    <strong>Level, badges en vaardigheid</strong>
-                  </div>
-                  <div className="pro-xp-chip">
-                    <Trophy aria-hidden="true" />
-                    <span>{levelScore} XP</span>
-                  </div>
-                </div>
-                <div className="pro-growth-hero">
+              <div className="neo-panel neo-growth-panel">
+                <section className="neo-growth-hero">
                   <div>
                     <small>Volgende mijlpaal</small>
                     <strong>{completedCount}/{nextMilestone} lessen</strong>
                     <span>Blijf rustig bouwen. Kleine sessies tellen ook.</span>
                   </div>
-                  <div className="pro-ring" style={{ '--progress': `${nextMilestoneProgress}%` } as CSSProperties}>
+                  <div className="neo-ring" style={{ '--progress': `${nextMilestoneProgress}%` } as CSSProperties}>
                     <span>{nextMilestoneProgress}%</span>
                   </div>
-                </div>
-                <div className="pro-achievement-row">
+                </section>
+                <section className="neo-achievement-track">
                   {achievements.map(({ complete, detail, icon: Icon, id, title }) => (
-                    <article className={complete ? 'pro-achievement complete' : 'pro-achievement'} key={id}>
+                    <article className={complete ? 'neo-achievement complete' : 'neo-achievement'} key={id}>
                       <Icon aria-hidden="true" />
                       <strong>{title}</strong>
                       <span>{detail}</span>
                     </article>
                   ))}
-                </div>
-                <div className="pro-skill-grid">
+                </section>
+                <section className="neo-skill-board">
                   {skillStats.map(({ skill, done, total, percent }) => (
-                    <article className="pro-skill-card" key={skill}>
+                    <article className="neo-skill-row" key={skill}>
                       <small>{done}/{total}</small>
                       <strong>{skill}</strong>
-                      <div className="pro-module-progress" aria-label={`${percent}%`}>
+                      <div className="neo-mini-progress" aria-label={`${percent}%`}>
                         <i style={{ width: `${percent}%` }} />
                       </div>
                     </article>
                   ))}
-                </div>
+                </section>
               </div>
             ) : null}
 
             {activePanel === 'studio' ? (
-              <div className="pro-panel-content">
-                <div className="pro-panel-header">
-                  <span>Studio</span>
-                  <strong>Account, voortgang en weergave</strong>
-                </div>
-                <div className="pro-studio-board">
-                  <article className="pro-studio-card pro-studio-profile">
+              <div className="neo-panel neo-studio-panel">
+                <div className="neo-studio-grid">
+                  <article className="neo-studio-unit profile">
                     <div>
                       <UserRound aria-hidden="true" />
                     </div>
                     <small>Account</small>
-                    <strong className="pro-account-name" title={displayName}>
+                    <strong title={displayName}>
                       {displayName}
                     </strong>
-                    <span className="pro-account-email">Privéprofiel actief</span>
+                    <span>Priveprofiel actief</span>
                     <button onClick={onLogOut} type="button">Uitloggen</button>
                   </article>
 
-                  <article className="pro-studio-card pro-studio-progress">
+                  <article className="neo-studio-unit">
                     <Gauge aria-hidden="true" />
                     <small>Voortgang</small>
                     <strong>{completionPercent}%</strong>
                     <span>{completedCount}/{lessons.length} lessen afgerond</span>
-                    <div className="pro-module-progress" aria-label={`${completionPercent}% afgerond`}>
+                    <div className="neo-mini-progress" aria-label={`${completionPercent}% afgerond`}>
                       <i style={{ width: `${completionPercent}%` }} />
                     </div>
                   </article>
 
-                  <article className="pro-studio-card pro-display-profile">
+                  <article className="neo-studio-unit display">
                     <SlidersHorizontal aria-hidden="true" />
                     <small>Weergave</small>
                     <strong>{displayProfile.title}</strong>
                     <span>{displayProfile.text}</span>
-                    <div className="pro-profile-toggle" role="group" aria-label="Weergaveprofiel">
+                    <div className="neo-profile-toggle" role="group" aria-label="Weergaveprofiel">
                       <button
                         className={practiceProfile === 'premium' ? 'active' : ''}
                         onClick={() => onPracticeProfileChange('premium')}
@@ -668,14 +645,14 @@ export const HomeScreen = ({
                     </div>
                   </article>
 
-                  <article className="pro-studio-card">
+                  <article className="neo-studio-unit">
                     <ListMusic aria-hidden="true" />
                     <small>Bron</small>
                     <strong>{sourceLabel[source]}</strong>
                     <span>{lessons.length} lessen · {totalMinutes} oefenminuten</span>
                   </article>
 
-                  <article className="pro-studio-card pro-account-danger">
+                  <article className="neo-studio-unit danger">
                     <RotateCcw aria-hidden="true" />
                     <small>Reset</small>
                     <strong>Voortgang</strong>
@@ -688,7 +665,44 @@ export const HomeScreen = ({
               </div>
             ) : null}
           </section>
-        </div>
+        </main>
+
+        <aside className="neo-hud" aria-label="Voortgang">
+          <section className="neo-hud-card primary">
+            <small>Route status</small>
+            <div className="neo-hud-ring" style={{ '--progress': `${completionPercent}%` } as CSSProperties}>
+              <span>{completionPercent}%</span>
+            </div>
+            <strong>{completedCount}/{lessons.length} lessen</strong>
+            <p>{completedMinutes}/{totalMinutes} minuten gespeeld</p>
+          </section>
+
+          <section className="neo-hud-card">
+            <small>Volgende badge</small>
+            <div className="neo-badge-preview">
+              <NextAchievementIcon aria-hidden="true" />
+              <span>
+                <strong>{nextAchievement.title}</strong>
+                <em>{nextAchievement.detail}</em>
+              </span>
+            </div>
+            <div className="neo-mini-progress" aria-label={`${nextMilestoneProgress}% naar volgende mijlpaal`}>
+              <i style={{ width: `${nextMilestoneProgress}%` }} />
+            </div>
+          </section>
+
+          <section className="neo-hud-card compact">
+            <small>Unlocks</small>
+            <strong>{unlockedModules}/{modules.length}</strong>
+            <span>hoofdstukken beschikbaar</span>
+          </section>
+
+          <section className="neo-hud-card compact">
+            <small>Studio profiel</small>
+            <strong>{displayProfile.title}</strong>
+            <span>{sourceLabel[source]}</span>
+          </section>
+        </aside>
       </div>
 
       {resetPrompt ? (
