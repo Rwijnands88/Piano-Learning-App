@@ -49,6 +49,8 @@ const matchingKeysForStep = (keys: PianoKeyName[], step: LessonStep) => (
   uniquePianoKeys(keys.filter((key) => detectedNoteMatchesStep(key, step)))
 );
 
+const minimumChordAttackVolume = 0.0105;
+
 const strikeQualityLabel = (volume: number) => {
   if (volume > 0 && volume < 0.008) {
     return 'zacht';
@@ -278,7 +280,9 @@ const LearningApp = () => {
 
     const matchedTargetKeys = matchingKeysForStep(pitch.heardKeys, currentStep);
     const detectedNote = pitch.detectedNote;
-    const matchedDetectedNote = detectedNote && detectedNoteMatchesStep(detectedNote, currentStep) ? detectedNote : null;
+    const chordStep = isChordStep(currentStep);
+    const matchedDetectedNote =
+      !chordStep && detectedNote && detectedNoteMatchesStep(detectedNote, currentStep) ? detectedNote : null;
     const matchedKeys = uniquePianoKeys([
       ...matchedTargetKeys,
       ...(matchedDetectedNote ? [matchedDetectedNote] : []),
@@ -295,7 +299,6 @@ const LearningApp = () => {
     }
 
     const targetLabel = targetLabelForStep(currentStep);
-    const chordStep = isChordStep(currentStep);
     const strikeLabel = strikeQualityLabel(pitch.volume);
     const strikeHint = strikeLabel === 'zacht' ? ' Speel iets duidelijker voor een betrouwbaarder signaal.' : '';
     const previousStep = selectedLessonAutoPlayable ? selectedLesson?.steps[stepIndex - 1] : undefined;
@@ -306,13 +309,20 @@ const LearningApp = () => {
       matchedKeys.length > 0
         ? matchedKeys.reduce((total, key) => total + (confidenceByKey.get(key) ?? 0.5), 0) / matchedKeys.length
         : 0;
+    const chordAttackReady = pitch.volume >= minimumChordAttackVolume && pitch.targetConfidence >= 0.56;
     const chordReady =
       chordStep &&
+      chordAttackReady &&
       (
         currentStep.keys.length <= 2
           ? matchedKeys.length === currentStep.keys.length
-          : matchedKeys.length === currentStep.keys.length || (matchedKeys.length >= 2 && matchedConfidence >= 0.42)
+          : matchedKeys.length === currentStep.keys.length || (matchedKeys.length >= 2 && matchedConfidence >= 0.62)
       );
+
+    if (chordStep && !chordAttackReady) {
+      return;
+    }
+
     const timingLagMatch =
       selectedLessonAutoPlayable &&
       detectedNote !== null &&
@@ -324,7 +334,7 @@ const LearningApp = () => {
       !detectedNoteMatchesStep(detectedNote, currentStep) &&
       Boolean(nextStep && detectedNoteMatchesStep(detectedNote, nextStep));
 
-    if (chordStep && matchedKeys.length > 0 && !chordReady) {
+    if (chordStep && matchedKeys.length > 0 && chordAttackReady && !chordReady) {
       const missingKeys = currentStep.keys.filter((key) => !matchedKeys.includes(key));
       lastAcceptedNoteRef.current = attemptKey;
       setFeedback({

@@ -41,6 +41,8 @@ type PublishedState = {
 };
 
 const frequencyByNote = new Map(pianoKeys.map((key) => [key.note, key.frequency]));
+const minimumTargetRms = 0.0068;
+const minimumTargetAttackRms = 0.0085;
 
 const emptyPublishedState: PublishedState = {
   note: null,
@@ -149,10 +151,13 @@ const targetConfidenceFromSpectrum = (
   fftSize: number,
   rms: number,
   monoNote: PianoKeyName | null,
+  ambientRms: number,
 ) => {
   const baseFrequency = frequencyByNote.get(key);
 
-  if (!baseFrequency || rms < 0.0024) {
+  const aboveAmbient = rms - ambientRms;
+
+  if (!baseFrequency || rms < minimumTargetRms || aboveAmbient < 0.0022) {
     return 0;
   }
 
@@ -166,12 +171,13 @@ const targetConfidenceFromSpectrum = (
   const wideFloor = averageBand(frequencyData, sampleRate, fftSize, Math.max(45, baseFrequency * 0.42), baseFrequency * 1.85);
   const localFloor = lowerFloor * 0.36 + upperFloor * 0.36 + wideFloor * 0.28;
   const contrast = harmonicEnergy / (localFloor + 0.000004);
-  const contrastScore = clamp01((contrast - 1.22) / 5.2);
-  const absoluteScore = clamp01((harmonicEnergy - 0.002) / 0.055);
-  const volumeGate = clamp01((rms - 0.0028) / 0.018);
-  const pitchBoost = monoNote === key ? 0.23 : 0;
+  const contrastScore = clamp01((contrast - 1.62) / 5.8);
+  const absoluteScore = clamp01((harmonicEnergy - 0.0045) / 0.07);
+  const volumeGate = clamp01((rms - minimumTargetRms) / 0.025);
+  const attackGate = clamp01((aboveAmbient - 0.0022) / 0.016);
+  const pitchBoost = monoNote === key && rms >= minimumTargetAttackRms ? 0.12 : 0;
 
-  return clamp01((contrastScore * 0.72 + absoluteScore * 0.28) * volumeGate + pitchBoost);
+  return clamp01((contrastScore * 0.72 + absoluteScore * 0.28) * volumeGate * attackGate + pitchBoost);
 };
 
 export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKeys: PianoKeyName[] = []): PitchState => {
@@ -203,6 +209,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
   const sessionRef = useRef(0);
   const targetKeysRef = useRef<PianoKeyName[]>([]);
   const targetSmoothingRef = useRef<Record<string, number>>({});
+  const ambientRmsRef = useRef(0.004);
   const candidateRef = useRef<{ note: PianoKeyName | null; since: number; frames: number }>({ note: null, since: 0, frames: 0 });
   const lastPublishedRef = useRef<PublishedState>(emptyPublishedState);
 
@@ -210,6 +217,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
   useEffect(() => {
     targetKeysRef.current = uniqueKeys(targetKeys);
     targetSmoothingRef.current = {};
+    ambientRmsRef.current = 0.004;
   }, [targetSignature]);
 
   const stop = useCallback(() => {
@@ -243,6 +251,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
     setVolume(0);
     candidateRef.current = { note: null, since: 0, frames: 0 };
     targetSmoothingRef.current = {};
+    ambientRmsRef.current = 0.004;
     lastPublishedRef.current = emptyPublishedState;
   }, []);
 
@@ -369,20 +378,33 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
         }
 
         const rms = Math.sqrt(sumSquares / input.length);
-        const nextNote = nextClarity > 0.72 && rms > 0.0045 && nextFrequency > 45 ? noteFromFrequency(nextFrequency) : null;
+        const previousAmbientRms = ambientRmsRef.current;
+        const likelyAttack = rms >= minimumTargetAttackRms && rms > previousAmbientRms * 1.75;
+
+        if (!likelyAttack && rms < previousAmbientRms * 1.28) {
+          ambientRmsRef.current = previousAmbientRms * 0.965 + rms * 0.035;
+        } else {
+          ambientRmsRef.current = previousAmbientRms * 0.995 + Math.min(rms, previousAmbientRms * 1.15) * 0.005;
+        }
+
+        const ambientRms = ambientRmsRef.current;
+        const nextNote = nextClarity > 0.76 && rms > minimumTargetAttackRms && rms > ambientRms * 1.55 && nextFrequency > 45
+          ? noteFromFrequency(nextFrequency)
+          : null;
         const targets = targetKeysRef.current;
         const rawTargetAnalysis = targets.map((key) => ({
           key,
-          confidence: targetConfidenceFromSpectrum(key, frequencyInput, audioContext.sampleRate, analyser.fftSize, rms, nextNote),
+          confidence: targetConfidenceFromSpectrum(key, frequencyInput, audioContext.sampleRate, analyser.fftSize, rms, nextNote, ambientRms),
           volume: rms,
           present: false,
         }));
-        const targetThreshold = targets.length > 1 ? 0.36 : 0.45;
+        const targetThreshold = targets.length > 1 ? 0.56 : 0.52;
         const nextSmoothing: Record<string, number> = {};
         const nextTargetAnalysis = rawTargetAnalysis.map((item) => {
           const previousConfidence = targetSmoothingRef.current[item.key] ?? 0;
-          const smoothedConfidence = clamp01(previousConfidence * 0.52 + item.confidence * 0.48);
-          const present = smoothedConfidence >= targetThreshold || item.confidence >= targetThreshold + 0.16;
+          const smoothedConfidence = clamp01(previousConfidence * 0.64 + item.confidence * 0.36);
+          const hasAttack = rms >= minimumTargetAttackRms && rms > ambientRms * 1.45;
+          const present = hasAttack && (smoothedConfidence >= targetThreshold || item.confidence >= targetThreshold + 0.18);
           nextSmoothing[item.key] = smoothedConfidence;
 
           return {
