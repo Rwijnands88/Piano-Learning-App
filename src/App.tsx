@@ -5,6 +5,7 @@ import { HomeScreen } from './components/HomeScreen';
 import { LessonCompleteScreen } from './components/LessonCompleteScreen';
 import { LessonIntroScreen } from './components/LessonIntroScreen';
 import { PracticeScreen } from './components/PracticeScreen';
+import { prettyKeys } from './data/piano';
 import { useAuth } from './hooks/useAuth';
 import { useLessons } from './hooks/useLessons';
 import { usePitchDetection } from './hooks/usePitchDetection';
@@ -13,11 +14,51 @@ import { hasFirebaseConfig } from './lib/firebase';
 import { playPianoNote } from './lib/pianoSynth';
 import { preloadVexFlow } from './lib/vexflowLoader';
 import { lessonSupportsAutoplay } from './music/scoreTimeline';
-import type { FeedbackState, LearningMode, PianoKeyName, PracticeNoteFeedback, PracticeNoteFeedbackKind, PracticeProfile } from './types';
+import type { FeedbackState, LearningMode, LessonStep, PianoKeyName, PracticeNoteFeedback, PracticeNoteFeedbackKind, PracticeProfile } from './types';
 
 const initialFeedback: FeedbackState = {
   tone: 'idle',
   message: 'Kies een les. Tijdens het oefenen zie je steeds een kort speeldoel.',
+};
+
+const prettyNote = (note: PianoKeyName) => note.replace('#', '♯');
+
+const isChordStep = (step: LessonStep) => step.recognitionMode === 'chord' || step.keys.length > 1;
+
+const expectedForStep = (step?: LessonStep) => step?.expectedNote ?? step?.keys[0];
+
+const targetLabelForStep = (step: LessonStep) => {
+  if (step.keys.length > 1) {
+    return prettyKeys(step.keys);
+  }
+
+  return expectedForStep(step)?.replace('#', '♯') ?? 'rust';
+};
+
+const detectedNoteMatchesStep = (note: PianoKeyName, step: LessonStep) => {
+  if (isChordStep(step)) {
+    return step.keys.includes(note);
+  }
+
+  return note === expectedForStep(step);
+};
+
+const uniquePianoKeys = (keys: PianoKeyName[]) => Array.from(new Set(keys));
+
+const matchingKeysForStep = (keys: PianoKeyName[], step: LessonStep) => (
+  uniquePianoKeys(keys.filter((key) => detectedNoteMatchesStep(key, step)))
+);
+
+const strikeQualityLabel = (volume: number) => {
+  if (volume > 0 && volume < 0.008) {
+    return 'zacht';
+  }
+
+  if (volume > 0.042) {
+    return 'stevig';
+  }
+
+  return 'duidelijk';
 };
 
 const storedPracticeProfile = (): PracticeProfile => {
@@ -50,6 +91,7 @@ const LearningApp = () => {
   const [completedSessionLessons, setCompletedSessionLessons] = useState<Set<string>>(new Set());
   const lastAcceptedNoteRef = useRef<string>('');
   const autoAdvanceTimerRef = useRef<number | null>(null);
+  const completeScreenReadyAtRef = useRef(0);
   const noteFeedbackPulseRef = useRef(0);
 
   useEffect(() => {
@@ -68,14 +110,21 @@ const LearningApp = () => {
   );
 
   const currentStep = selectedLesson?.steps[Math.min(stepIndex, Math.max(selectedLesson.steps.length - 1, 0))];
-  const expectedStepNote = currentStep?.expectedNote ?? currentStep?.keys[0];
+  const expectedStepNote = expectedForStep(currentStep);
   const canMatchWithMicrophone =
     currentStep?.recognitionMode !== 'manual-score' &&
-    currentStep?.recognitionMode !== 'chord' &&
-    Boolean(expectedStepNote);
+    Boolean(expectedStepNote || currentStep?.keys.length);
   const lessonCompleted = Boolean(selectedLesson && completedSessionLessons.has(selectedLesson.id));
+  const pitchTargetKeys = useMemo(() => {
+    if (!currentStep || !canMatchWithMicrophone || lessonCompleted || screen !== 'practice') {
+      return [];
+    }
+
+    return currentStep.keys.length > 0 ? currentStep.keys : expectedStepNote ? [expectedStepNote] : [];
+  }, [canMatchWithMicrophone, currentStep, expectedStepNote, lessonCompleted, screen, selectedLesson?.id, stepIndex]);
   const selectedLessonAutoPlayable = Boolean(selectedLesson && lessonSupportsAutoplay(selectedLesson));
   const nextLesson = lessons[selectedLessonIndex + 1];
+  const [listenAdvanceToNextLesson, setListenAdvanceToNextLesson] = useState(false);
   const displayedCompletedLessonIds = useMemo(
     () => new Set([...progress.completedLessonIds, ...completedSessionLessons]),
     [completedSessionLessons, progress.completedLessonIds],
@@ -83,9 +132,19 @@ const LearningApp = () => {
 
   const pitch = usePitchDetection(
     mode,
-    Boolean(auth.user && currentStep && canMatchWithMicrophone && !lessonCompleted && screen === 'practice'),
+    Boolean(
+      auth.user &&
+        (
+          (currentStep && canMatchWithMicrophone && !lessonCompleted && screen === 'practice') ||
+          (screen === 'complete' && mode === 'listen' && listenAdvanceToNextLesson && nextLesson)
+        ),
+    ),
+    pitchTargetKeys,
   );
-  const displayedDetectedNote = mode === 'manual' ? manualDetectedNote : pitch.detectedNote;
+  const displayedDetectedNotes = mode === 'manual'
+    ? (manualDetectedNote ? [manualDetectedNote] : [])
+    : (pitch.heardKeys.length > 0 ? pitch.heardKeys : pitch.detectedNote ? [pitch.detectedNote] : []);
+  const displayedDetectedNote = displayedDetectedNotes[0] ?? null;
 
   useEffect(() => {
     window.localStorage.setItem('practice-profile', practiceProfile);
@@ -95,14 +154,18 @@ const LearningApp = () => {
     kind: PracticeNoteFeedbackKind,
     message: string,
     detectedNote: PianoKeyName | null = null,
+    detectedKeys: PianoKeyName[] = detectedNote ? [detectedNote] : [],
   ) => {
     const expected = currentStep?.expectedNote ?? currentStep?.keys[0];
+    const expectedKeys = currentStep?.keys.length ? currentStep.keys : expected ? [expected] : [];
 
     setNoteFeedback({
       kind,
       stepIndex,
       expectedNote: expected,
+      expectedKeys,
       detectedNote,
+      detectedKeys,
       message,
       pulseId: (noteFeedbackPulseRef.current += 1),
     });
@@ -134,6 +197,7 @@ const LearningApp = () => {
     setStepIndex(0);
     lastAcceptedNoteRef.current = '';
     setManualDetectedNote(null);
+    setListenAdvanceToNextLesson(false);
     setFeedback(initialFeedback);
     preloadVexFlow();
     setScreen('intro');
@@ -147,6 +211,7 @@ const LearningApp = () => {
     setStepIndex(0);
     lastAcceptedNoteRef.current = '';
     setManualDetectedNote(null);
+    setListenAdvanceToNextLesson(false);
     setFeedback({ tone: 'idle', message: 'Oefening gestart.' });
     preloadVexFlow();
     setScreen('practice');
@@ -159,14 +224,16 @@ const LearningApp = () => {
 
     const expected = currentStep.expectedNote ?? currentStep.keys[0];
     const nextKind: PracticeNoteFeedbackKind = currentStep.keys.length === 0 ? 'pending' : 'active';
-    const label = expected?.replace('#', '♯') ?? 'rust';
+    const label = targetLabelForStep(currentStep);
 
     setNoteFeedback({
       kind: nextKind,
       stepIndex,
       expectedNote: expected,
+      expectedKeys: currentStep.keys.length ? currentStep.keys : expected ? [expected] : [],
       detectedNote: null,
-      message: currentStep.keys.length === 0 ? 'Tel de rust rustig door.' : `Speel ${label}.`,
+      detectedKeys: [],
+      message: currentStep.keys.length === 0 ? 'Tel de rust rustig door.' : isChordStep(currentStep) ? `Speel ${label} samen.` : `Speel ${label}.`,
       pulseId: (noteFeedbackPulseRef.current += 1),
     });
   }, [currentStep, screen, selectedLessonId, stepIndex]);
@@ -190,7 +257,7 @@ const LearningApp = () => {
         currentStep.recognitionMode === 'manual-score' || !expectedStepNote
           ? 'Lees de rust of telstap en ga verder wanneer je klaar bent.'
           : currentStep.recognitionMode === 'chord'
-            ? 'Akkoorden worden visueel begeleid. Speel het akkoord en ga verder wanneer het goed voelt.'
+            ? `Luistert naar ${targetLabelForStep(currentStep)}. Speel het akkoord samen.`
           : pitch.isListening
             ? 'Luistert naar je piano.'
             : 'Microfoon wordt gestart...',
@@ -201,8 +268,7 @@ const LearningApp = () => {
     if (
       !currentStep ||
       mode !== 'listen' ||
-      !pitch.detectedNote ||
-      !expectedStepNote ||
+      (!pitch.detectedNote && pitch.heardKeys.length === 0) ||
       !canMatchWithMicrophone ||
       lessonCompleted ||
       screen !== 'practice'
@@ -210,36 +276,81 @@ const LearningApp = () => {
       return;
     }
 
-    const attemptKey = `${selectedLesson?.id}-${stepIndex}-${pitch.detectedNote}`;
+    const matchedTargetKeys = matchingKeysForStep(pitch.heardKeys, currentStep);
+    const detectedNote = pitch.detectedNote;
+    const matchedDetectedNote = detectedNote && detectedNoteMatchesStep(detectedNote, currentStep) ? detectedNote : null;
+    const matchedKeys = uniquePianoKeys([
+      ...matchedTargetKeys,
+      ...(matchedDetectedNote ? [matchedDetectedNote] : []),
+    ]);
+    const attemptKeys = uniquePianoKeys([
+      ...matchedKeys,
+      ...(detectedNote ? [detectedNote] : []),
+      ...(pitch.strongestTargetNote ? [pitch.strongestTargetNote] : []),
+    ]);
+    const attemptKey = `${selectedLesson?.id}-${stepIndex}-${attemptKeys.join('-') || 'signal'}-${Math.round(pitch.targetConfidence * 20)}`;
 
     if (attemptKey === lastAcceptedNoteRef.current) {
       return;
     }
 
-    const previousExpectedNote = selectedLessonAutoPlayable
-      ? (selectedLesson?.steps[stepIndex - 1]?.expectedNote ?? selectedLesson?.steps[stepIndex - 1]?.keys[0])
-      : undefined;
-    const nextExpectedNote = selectedLessonAutoPlayable
-      ? (selectedLesson?.steps[stepIndex + 1]?.expectedNote ?? selectedLesson?.steps[stepIndex + 1]?.keys[0])
-      : undefined;
+    const targetLabel = targetLabelForStep(currentStep);
+    const chordStep = isChordStep(currentStep);
+    const strikeLabel = strikeQualityLabel(pitch.volume);
+    const strikeHint = strikeLabel === 'zacht' ? ' Speel iets duidelijker voor een betrouwbaarder signaal.' : '';
+    const previousStep = selectedLessonAutoPlayable ? selectedLesson?.steps[stepIndex - 1] : undefined;
+    const nextStep = selectedLessonAutoPlayable ? selectedLesson?.steps[stepIndex + 1] : undefined;
+    const primaryAttemptNote = matchedKeys[0] ?? detectedNote;
+    const confidenceByKey = new Map(pitch.targetAnalysis.map((item) => [item.key, item.confidence]));
+    const matchedConfidence =
+      matchedKeys.length > 0
+        ? matchedKeys.reduce((total, key) => total + (confidenceByKey.get(key) ?? 0.5), 0) / matchedKeys.length
+        : 0;
+    const chordReady =
+      chordStep &&
+      (
+        currentStep.keys.length <= 2
+          ? matchedKeys.length === currentStep.keys.length
+          : matchedKeys.length === currentStep.keys.length || (matchedKeys.length >= 2 && matchedConfidence >= 0.42)
+      );
     const timingLagMatch =
       selectedLessonAutoPlayable &&
-      pitch.detectedNote !== expectedStepNote &&
-      pitch.detectedNote === previousExpectedNote;
+      detectedNote !== null &&
+      !detectedNoteMatchesStep(detectedNote, currentStep) &&
+      Boolean(previousStep && detectedNoteMatchesStep(detectedNote, previousStep));
     const timingEarlyMatch =
       selectedLessonAutoPlayable &&
-      pitch.detectedNote !== expectedStepNote &&
-      pitch.detectedNote === nextExpectedNote;
+      detectedNote !== null &&
+      !detectedNoteMatchesStep(detectedNote, currentStep) &&
+      Boolean(nextStep && detectedNoteMatchesStep(detectedNote, nextStep));
 
-    if (pitch.detectedNote === expectedStepNote) {
+    if (chordStep && matchedKeys.length > 0 && !chordReady) {
+      const missingKeys = currentStep.keys.filter((key) => !matchedKeys.includes(key));
+      lastAcceptedNoteRef.current = attemptKey;
+      setFeedback({
+        tone: 'warning',
+        message: `Ik hoor ${prettyKeys(matchedKeys)}. Voeg ${prettyKeys(missingKeys)} samen toe. Aanslag: ${strikeLabel}.${strikeHint}`,
+      });
+      publishNoteFeedback('late', `Bijna: ${prettyKeys(matchedKeys)}.`, matchedKeys[0], matchedKeys);
+      return;
+    }
+
+    if ((chordStep && chordReady && primaryAttemptNote) || (!chordStep && matchedKeys.length > 0 && primaryAttemptNote)) {
       lastAcceptedNoteRef.current = attemptKey;
       setFeedback({
         tone: 'success',
-        message: selectedLessonAutoPlayable
-          ? `${pitch.detectedNote.replace('#', '♯')} klopt. Blijf in de puls.`
-          : `${pitch.detectedNote.replace('#', '♯')} klopt. Door naar de volgende stap.`,
+        message: chordStep
+          ? `Akkoord ${targetLabel} herkend. Aanslag: ${strikeLabel}.${strikeHint}`
+          : selectedLessonAutoPlayable
+            ? `${prettyNote(primaryAttemptNote)} klopt. Aanslag: ${strikeLabel}. Blijf in de puls.${strikeHint}`
+            : `${prettyNote(primaryAttemptNote)} klopt. Aanslag: ${strikeLabel}. Door naar de volgende stap.${strikeHint}`,
       });
-      publishNoteFeedback('correct', `Goed: ${pitch.detectedNote.replace('#', '♯')}.`, pitch.detectedNote);
+      publishNoteFeedback(
+        'correct',
+        chordStep ? `Akkoord: ${prettyKeys(matchedKeys)} · ${strikeLabel}.` : `Goed: ${prettyNote(primaryAttemptNote)} · ${strikeLabel}.`,
+        primaryAttemptNote,
+        matchedKeys.length > 0 ? matchedKeys : [primaryAttemptNote],
+      );
 
       if (!selectedLessonAutoPlayable) {
         autoAdvanceTimerRef.current = window.setTimeout(() => {
@@ -250,29 +361,31 @@ const LearningApp = () => {
       lastAcceptedNoteRef.current = attemptKey;
       setFeedback({
         tone: 'success',
-        message: `${pitch.detectedNote.replace('#', '♯')} klopt. De microfoon hoorde hem net later.`,
+        message: `${detectedNote ? prettyNote(detectedNote) : 'De noot'} klopt. De microfoon hoorde hem net later.`,
       });
-      publishNoteFeedback('correct', `Goed: ${pitch.detectedNote.replace('#', '♯')}.`, pitch.detectedNote);
+      publishNoteFeedback('correct', `Goed: ${detectedNote ? prettyNote(detectedNote) : targetLabel}.`, detectedNote, detectedNote ? [detectedNote] : []);
     } else if (timingEarlyMatch) {
       lastAcceptedNoteRef.current = attemptKey;
       setFeedback({
         tone: 'warning',
-        message: `${pitch.detectedNote.replace('#', '♯')} is net vroeg. Wacht op de gloed.`,
+        message: `${detectedNote ? prettyNote(detectedNote) : 'De noot'} is net vroeg. Wacht op de gloed.`,
       });
       publishNoteFeedback(
         'late',
-        `${pitch.detectedNote.replace('#', '♯')} net vroeg.`,
-        pitch.detectedNote,
+        `${detectedNote ? prettyNote(detectedNote) : targetLabel} net vroeg.`,
+        detectedNote,
+        detectedNote ? [detectedNote] : [],
       );
-    } else {
+    } else if (detectedNote) {
       setFeedback({
         tone: 'error',
-        message: `${pitch.detectedNote.replace('#', '♯')} gehoord. Probeer ${expectedStepNote.replace('#', '♯')}.`,
+        message: `${prettyNote(detectedNote)} gehoord. Probeer ${targetLabel}.`,
       });
       publishNoteFeedback(
         'wrong',
-        `${pitch.detectedNote.replace('#', '♯')} gehoord, probeer ${expectedStepNote.replace('#', '♯')}.`,
-        pitch.detectedNote,
+        `${prettyNote(detectedNote)} gehoord, probeer ${targetLabel}.`,
+        detectedNote,
+        [detectedNote],
       );
     }
   }, [
@@ -282,6 +395,11 @@ const LearningApp = () => {
     lessonCompleted,
     mode,
     pitch.detectedNote,
+    pitch.heardKeys,
+    pitch.strongestTargetNote,
+    pitch.targetAnalysis,
+    pitch.targetConfidence,
+    pitch.volume,
     screen,
     selectedLessonAutoPlayable,
     selectedLesson?.id,
@@ -326,6 +444,9 @@ const LearningApp = () => {
   };
 
   const completeCurrentLesson = () => {
+    setListenAdvanceToNextLesson(mode === 'listen' && Boolean(nextLesson));
+    completeScreenReadyAtRef.current = performance.now() + 900;
+
     if (!selectedLesson || lessonCompleted) {
       setScreen('complete');
       return;
@@ -358,6 +479,8 @@ const LearningApp = () => {
     if (stepIndex >= selectedLesson.steps.length - 1) {
       markLessonCompleted(selectedLesson.id);
       setFeedback({ tone: 'success', message: 'Les afgerond. Je voortgang is opgeslagen.' });
+      setListenAdvanceToNextLesson(mode === 'listen' && Boolean(nextLesson));
+      completeScreenReadyAtRef.current = performance.now() + 900;
       setScreen('complete');
       return;
     }
@@ -372,6 +495,7 @@ const LearningApp = () => {
     setStepIndex(0);
     lastAcceptedNoteRef.current = '';
     setManualDetectedNote(null);
+    setListenAdvanceToNextLesson(false);
     setFeedback({ tone: 'idle', message: 'Les opnieuw gestart.' });
     if (selectedLesson) {
       setCompletedSessionLessons((items) => {
@@ -397,6 +521,38 @@ const LearningApp = () => {
     setScreen('home');
   };
 
+  useEffect(() => {
+    if (
+      screen !== 'complete' ||
+      mode !== 'listen' ||
+      !listenAdvanceToNextLesson ||
+      !nextLesson ||
+      !pitch.detectedNote
+    ) {
+      return;
+    }
+
+    if (performance.now() < completeScreenReadyAtRef.current) {
+      return;
+    }
+
+    const attemptKey = `complete-${selectedLesson?.id}-${pitch.detectedNote}`;
+    if (attemptKey === lastAcceptedNoteRef.current) {
+      return;
+    }
+
+    lastAcceptedNoteRef.current = attemptKey;
+    setFeedback({ tone: 'idle', message: `${prettyNote(pitch.detectedNote)} gehoord. Volgende les geopend.` });
+    openLessonIntro(nextLesson.id);
+  }, [
+    listenAdvanceToNextLesson,
+    mode,
+    nextLesson,
+    pitch.detectedNote,
+    screen,
+    selectedLesson?.id,
+  ]);
+
   const handleManualKeyPress = (note: PianoKeyName) => {
     if (!currentStep || mode !== 'manual' || lessonCompleted || screen !== 'practice') {
       return;
@@ -405,25 +561,29 @@ const LearningApp = () => {
     void playPianoNote(note);
     setManualDetectedNote(note);
 
-    const expected = currentStep.expectedNote ?? currentStep.keys[0];
+    const expected = expectedForStep(currentStep);
+    const targetLabel = targetLabelForStep(currentStep);
+    const chordStep = isChordStep(currentStep);
     if (!expected) {
-      setFeedback({ tone: 'idle', message: `${note.replace('#', '♯')} gespeeld.` });
-      publishNoteFeedback('active', `${note.replace('#', '♯')} gespeeld.`, note);
+      setFeedback({ tone: 'idle', message: `${prettyNote(note)} gespeeld.` });
+      publishNoteFeedback('active', `${prettyNote(note)} gespeeld.`, note);
       return;
     }
 
-    if (note === expected) {
+    if (detectedNoteMatchesStep(note, currentStep)) {
       if (autoAdvanceTimerRef.current !== null) {
         window.clearTimeout(autoAdvanceTimerRef.current);
       }
 
       setFeedback({
         tone: 'success',
-        message: selectedLessonAutoPlayable
-          ? `${note.replace('#', '♯')} klopt. Blijf in de puls.`
-          : `${note.replace('#', '♯')} klopt. Door naar de volgende stap.`,
+        message: chordStep
+          ? `Akkoordtoon ${prettyNote(note)} gekozen in ${targetLabel}.`
+          : selectedLessonAutoPlayable
+            ? `${prettyNote(note)} klopt. Blijf in de puls.`
+            : `${prettyNote(note)} klopt. Door naar de volgende stap.`,
       });
-      publishNoteFeedback('correct', `Goed: ${note.replace('#', '♯')}.`, note);
+      publishNoteFeedback('correct', chordStep ? `Akkoordtoon: ${prettyNote(note)}.` : `Goed: ${prettyNote(note)}.`, note);
 
       if (!selectedLessonAutoPlayable) {
         autoAdvanceTimerRef.current = window.setTimeout(() => {
@@ -435,9 +595,9 @@ const LearningApp = () => {
 
     setFeedback({
       tone: 'error',
-      message: `${note.replace('#', '♯')} gekozen. Probeer ${expected.replace('#', '♯')}.`,
+      message: `${prettyNote(note)} gekozen. Probeer ${targetLabel}.`,
     });
-    publishNoteFeedback('wrong', `${note.replace('#', '♯')} gekozen, probeer ${expected.replace('#', '♯')}.`, note);
+    publishNoteFeedback('wrong', `${prettyNote(note)} gekozen, probeer ${targetLabel}.`, note);
   };
 
   if (auth.loading) {
@@ -510,6 +670,7 @@ const LearningApp = () => {
           completedCount={displayedCompletedLessonIds.size}
           lesson={selectedLesson}
           nextLesson={nextLesson}
+          canAdvanceWithPiano={mode === 'listen' && listenAdvanceToNextLesson && Boolean(nextLesson)}
           onBackHome={() => setScreen('home')}
           onNextLesson={openNextLessonIntro}
           onRepeat={repeatLesson}
@@ -520,6 +681,7 @@ const LearningApp = () => {
           canGoBack={stepIndex > 0}
           completed={lessonCompleted}
           detectedNote={displayedDetectedNote}
+          detectedNotes={displayedDetectedNotes}
           feedback={feedback}
           isListening={pitch.isListening}
           lesson={selectedLesson}

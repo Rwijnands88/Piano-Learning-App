@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, CheckCircle2, Home, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Home, Mic, RotateCcw } from 'lucide-react';
 import type { Lesson } from '../types';
 
 type LessonCompleteScreenProps = {
@@ -6,6 +6,7 @@ type LessonCompleteScreenProps = {
   nextLesson?: Lesson;
   completedCount: number;
   totalLessons: number;
+  canAdvanceWithPiano?: boolean;
   onBackHome: () => void;
   onRepeat: () => void;
   onNextLesson: () => void;
@@ -18,6 +19,7 @@ export const LessonCompleteScreen = ({
   nextLesson,
   completedCount,
   totalLessons,
+  canAdvanceWithPiano = false,
   onBackHome,
   onRepeat,
   onNextLesson,
@@ -45,6 +47,13 @@ export const LessonCompleteScreen = ({
             <small>Volgende les</small>
             <strong>{nextLesson.title}</strong>
             <span>{nextLesson.estimatedMinutes ?? 8} min · {compactModuleName(nextLesson.module)}</span>
+          </div>
+        ) : null}
+
+        {canAdvanceWithPiano ? (
+          <div className="finale-listen-hint">
+            <Mic aria-hidden="true" />
+            <span>Speel een toets op je piano om de volgende les te openen.</span>
           </div>
         ) : null}
 
