@@ -1,29 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronLeft, Hand, Mic, Pause, Play, RotateCcw } from 'lucide-react';
-import { createScoreTimeline } from '../music/scoreTimeline';
 import { useScoreTransport } from '../music/useScoreTransport';
 import { PremiumKeyboard } from './PremiumKeyboard';
 import { ScoreRenderer } from './ScoreRenderer';
-import type { FeedbackState, LearningMode, Lesson, LessonStep, PianoKeyName, PracticeNoteFeedback, PracticeProfile } from '../types';
-
-type PracticePlayerV2Props = {
-  lesson: Lesson;
-  step: LessonStep;
-  stepIndex: number;
-  mode: LearningMode;
-  isListening: boolean;
-  detectedNote: PianoKeyName | null;
-  feedback: FeedbackState;
-  noteFeedback: PracticeNoteFeedback;
-  completed: boolean;
-  onModeChange: (mode: LearningMode) => void;
-  onBackHome: () => void;
-  onKeyPress: (note: PianoKeyName) => void;
-  onRestart: () => void;
-  onTransportStepChange: (stepIndex: number) => void;
-  onTransportComplete: () => void;
-  practiceProfile: PracticeProfile;
-};
+import type { PianoKeyName } from '../types';
+import type { PracticePlayerProps } from './practicePlayerTypes';
 
 const compactModuleName = (module: string) => module.replace(/^\d+\.\s*/, '');
 
@@ -48,11 +29,11 @@ export const PracticePlayerV2 = ({
   onTransportStepChange,
   onTransportComplete,
   practiceProfile,
-}: PracticePlayerV2Props) => {
+  timeline,
+}: PracticePlayerProps) => {
   const [playing, setPlaying] = useState(false);
   const [speedPercent, setSpeedPercent] = useState(70);
   const [countdownIndex, setCountdownIndex] = useState(0);
-  const timeline = useMemo(() => createScoreTimeline(lesson), [lesson]);
   const transport = useScoreTransport({
     timeline,
     playing,
