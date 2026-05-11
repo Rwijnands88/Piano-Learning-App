@@ -19,7 +19,6 @@ export const PracticePlayerV2 = ({
   mode,
   isListening,
   detectedNote,
-  detectedNotes,
   feedback,
   noteFeedback,
   completed,
@@ -172,7 +171,6 @@ export const PracticePlayerV2 = ({
 
       <PremiumKeyboard
         detectedKey={detectedNote}
-        detectedKeys={detectedNotes}
         disabled={completed || mode !== 'manual'}
         expectedKey={step.expectedNote}
         feedbackTone={feedback.tone}

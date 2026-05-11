@@ -6,7 +6,6 @@ type PremiumKeyboardProps = {
   lessonKeys: PianoKeyName[];
   upcomingKeys?: PianoKeyName[];
   detectedKey: PianoKeyName | null;
-  detectedKeys?: PianoKeyName[];
   expectedKey?: PianoKeyName;
   feedbackTone?: FeedbackState['tone'];
   noteFeedback?: PracticeNoteFeedback;
@@ -28,7 +27,6 @@ export const PremiumKeyboard = memo(function PremiumKeyboard({
   lessonKeys,
   upcomingKeys = [],
   detectedKey,
-  detectedKeys,
   expectedKey,
   feedbackTone = 'idle',
   noteFeedback,
@@ -39,9 +37,6 @@ export const PremiumKeyboard = memo(function PremiumKeyboard({
 }: PremiumKeyboardProps) {
   const lessonSet = new Set(lessonKeys);
   const upcomingSet = new Set(upcomingKeys);
-  const detectedSet = new Set(detectedKeys ?? (detectedKey ? [detectedKey] : []));
-  const feedbackExpectedSet = new Set(noteFeedback?.expectedKeys ?? (noteFeedback?.expectedNote ? [noteFeedback.expectedNote] : []));
-  const feedbackDetectedSet = new Set(noteFeedback?.detectedKeys ?? (noteFeedback?.detectedNote ? [noteFeedback.detectedNote] : []));
   const canPlay = Boolean(onKeyPress) && !disabled;
 
   return (
@@ -51,10 +46,10 @@ export const PremiumKeyboard = memo(function PremiumKeyboard({
           const classes = [
             lessonSet.has(key.note) ? 'lesson' : '',
             upcomingSet.has(key.note) && !lessonSet.has(key.note) ? 'upcoming' : '',
-            detectedSet.has(key.note) ? 'detected' : '',
+            detectedKey === key.note ? 'detected' : '',
             expectedKey === key.note ? 'expected' : '',
-            feedbackExpectedSet.has(key.note) ? `target-${noteFeedback?.kind}` : '',
-            feedbackDetectedSet.has(key.note) ? `attempt-${noteFeedback?.kind}` : '',
+            noteFeedback?.expectedNote === key.note ? `target-${noteFeedback.kind}` : '',
+            noteFeedback?.detectedNote === key.note ? `attempt-${noteFeedback.kind}` : '',
           ]
             .filter(Boolean)
             .join(' ');
@@ -68,7 +63,7 @@ export const PremiumKeyboard = memo(function PremiumKeyboard({
               onClick={() => onKeyPress?.(key.note)}
               type="button"
             >
-              <b>{showLabels && (lessonSet.has(key.note) || detectedSet.has(key.note)) ? key.label : ''}</b>
+              <b>{showLabels && (lessonSet.has(key.note) || detectedKey === key.note) ? key.label : ''}</b>
             </button>
           );
         })}
@@ -84,10 +79,10 @@ export const PremiumKeyboard = memo(function PremiumKeyboard({
             const classes = [
               lessonSet.has(key.note) ? 'lesson' : '',
               upcomingSet.has(key.note) && !lessonSet.has(key.note) ? 'upcoming' : '',
-              detectedSet.has(key.note) ? 'detected' : '',
+              detectedKey === key.note ? 'detected' : '',
               expectedKey === key.note ? 'expected' : '',
-              feedbackExpectedSet.has(key.note) ? `target-${noteFeedback?.kind}` : '',
-              feedbackDetectedSet.has(key.note) ? `attempt-${noteFeedback?.kind}` : '',
+              noteFeedback?.expectedNote === key.note ? `target-${noteFeedback.kind}` : '',
+              noteFeedback?.detectedNote === key.note ? `attempt-${noteFeedback.kind}` : '',
             ]
               .filter(Boolean)
               .join(' ');
@@ -102,7 +97,7 @@ export const PremiumKeyboard = memo(function PremiumKeyboard({
                 style={{ left }}
                 type="button"
               >
-                <b>{showLabels && (lessonSet.has(key.note) || detectedSet.has(key.note)) ? key.label : ''}</b>
+                <b>{showLabels && (lessonSet.has(key.note) || detectedKey === key.note) ? key.label : ''}</b>
               </button>
             );
           })}

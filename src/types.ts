@@ -92,9 +92,7 @@ export type PracticeNoteFeedback = {
   kind: PracticeNoteFeedbackKind;
   stepIndex: number;
   expectedNote?: PianoKeyName;
-  expectedKeys?: PianoKeyName[];
   detectedNote?: PianoKeyName | null;
-  detectedKeys?: PianoKeyName[];
   message: string;
   pulseId: number;
 };

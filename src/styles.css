@@ -6209,7 +6209,6 @@ p {
 .prelude-plan div,
 .prelude-teacher-note,
 .finale-next,
-.finale-listen-hint,
 .finale-progress {
   min-width: 0;
   border: 1px solid rgba(255, 238, 203, 0.13);
@@ -6230,29 +6229,11 @@ p {
 }
 
 .prelude-plan svg,
-.finale-next svg,
-.finale-listen-hint svg {
+.finale-next svg {
   grid-row: span 2;
   width: 20px;
   height: 20px;
   color: #d7a749;
-}
-
-.finale-listen-hint {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 11px 13px;
-}
-
-.finale-listen-hint span {
-  overflow: hidden;
-  color: rgba(255, 248, 236, 0.76);
-  font-size: clamp(0.82rem, 1.05vw, 1rem);
-  font-weight: 820;
-  line-height: 1.25;
 }
 
 .prelude-plan strong,
@@ -7913,7 +7894,6 @@ body {
 .prelude-plan div,
 .prelude-teacher-note,
 .finale-next,
-.finale-listen-hint,
 .finale-progress {
   border-color: var(--neo-line);
   background:

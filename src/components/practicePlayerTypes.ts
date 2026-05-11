@@ -16,7 +16,6 @@ export type PracticeScreenProps = {
   mode: LearningMode;
   isListening: boolean;
   detectedNote: PianoKeyName | null;
-  detectedNotes: PianoKeyName[];
   feedback: FeedbackState;
   noteFeedback: PracticeNoteFeedback;
   completed: boolean;
