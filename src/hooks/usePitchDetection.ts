@@ -46,8 +46,8 @@ type TargetPresenceState = {
 };
 
 const frequencyByNote = new Map(pianoKeys.map((key) => [key.note, key.frequency]));
-const minimumTargetRms = 0.0068;
-const minimumTargetAttackRms = 0.0085;
+const minimumTargetRms = 0.0062;
+const minimumTargetAttackRms = 0.0076;
 
 const emptyPublishedState: PublishedState = {
   note: null,
@@ -407,7 +407,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
           volume: rms,
           present: false,
         }));
-        const targetThreshold = targets.length > 1 ? 0.56 : 0.52;
+        const targetThreshold = targets.length > 1 ? 0.5 : 0.52;
         const nextSmoothing: Record<string, number> = {};
         const nextPresence: Record<string, TargetPresenceState> = {};
         const nextTargetAnalysis = rawTargetAnalysis.map((item) => {
@@ -419,7 +419,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
           const heldPresent =
             Boolean(previousPresence?.present) &&
             smoothedConfidence >= targetThreshold - 0.18 &&
-            now - previousPresence.lastPresentAt < 260;
+            now - previousPresence.lastPresentAt < 360;
           const present = attackPresent || heldPresent;
           nextSmoothing[item.key] = smoothedConfidence;
           nextPresence[item.key] = {

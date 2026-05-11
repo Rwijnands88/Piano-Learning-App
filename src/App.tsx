@@ -49,8 +49,9 @@ const matchingKeysForStep = (keys: PianoKeyName[], step: LessonStep) => (
   uniquePianoKeys(keys.filter((key) => detectedNoteMatchesStep(key, step)))
 );
 
-const minimumChordAttackVolume = 0.0105;
-const chordStableWindowMs = 180;
+const minimumChordAttackVolume = 0.0088;
+const chordCollectWindowMs = 540;
+const chordStableWindowMs = 110;
 const chordPartialHintCooldownMs = 1200;
 
 const strikeQualityLabel = (volume: number) => {
@@ -97,7 +98,13 @@ const LearningApp = () => {
   const autoAdvanceTimerRef = useRef<number | null>(null);
   const completeScreenReadyAtRef = useRef(0);
   const noteFeedbackPulseRef = useRef(0);
-  const chordCandidateRef = useRef<{ signature: string; since: number }>({ signature: '', since: 0 });
+  const chordCandidateRef = useRef<{
+    signature: string;
+    since: number;
+    lastAt: number;
+    keys: PianoKeyName[];
+    bestConfidence: number;
+  }>({ signature: '', since: 0, lastAt: 0, keys: [], bestConfidence: 0 });
   const chordPartialHintRef = useRef<{ signature: string; at: number }>({ signature: '', at: 0 });
 
   useEffect(() => {
@@ -178,7 +185,7 @@ const LearningApp = () => {
   };
 
   useEffect(() => {
-    chordCandidateRef.current = { signature: '', since: 0 };
+    chordCandidateRef.current = { signature: '', since: 0, lastAt: 0, keys: [], bestConfidence: 0 };
     chordPartialHintRef.current = { signature: '', at: 0 };
   }, [screen, selectedLessonId, stepIndex]);
 
@@ -312,21 +319,15 @@ const LearningApp = () => {
     const strikeHint = strikeLabel === 'zacht' ? ' Speel iets duidelijker voor een betrouwbaarder signaal.' : '';
     const previousStep = selectedLessonAutoPlayable ? selectedLesson?.steps[stepIndex - 1] : undefined;
     const nextStep = selectedLessonAutoPlayable ? selectedLesson?.steps[stepIndex + 1] : undefined;
-    const primaryAttemptNote = matchedKeys[0] ?? detectedNote;
+    let acceptedMatchedKeys = matchedKeys;
+    let primaryAttemptNote = acceptedMatchedKeys[0] ?? detectedNote;
     const confidenceByKey = new Map(pitch.targetAnalysis.map((item) => [item.key, item.confidence]));
     const matchedConfidence =
       matchedKeys.length > 0
         ? matchedKeys.reduce((total, key) => total + (confidenceByKey.get(key) ?? 0.5), 0) / matchedKeys.length
         : 0;
-    const chordAttackReady = pitch.volume >= minimumChordAttackVolume && pitch.targetConfidence >= 0.56;
-    const chordReady =
-      chordStep &&
-      chordAttackReady &&
-      (
-        currentStep.keys.length <= 2
-          ? matchedKeys.length === currentStep.keys.length
-          : matchedKeys.length === currentStep.keys.length || (matchedKeys.length >= 2 && matchedConfidence >= 0.62)
-      );
+    const chordAttackReady = pitch.volume >= minimumChordAttackVolume && (pitch.targetConfidence >= 0.46 || matchedKeys.length > 0);
+    let chordReady = false;
 
     const timingLagMatch =
       selectedLessonAutoPlayable &&
@@ -343,16 +344,54 @@ const LearningApp = () => {
       const now = performance.now();
 
       if (!chordAttackReady) {
-        chordCandidateRef.current = { signature: '', since: 0 };
+        if (now - chordCandidateRef.current.lastAt > chordCollectWindowMs) {
+          chordCandidateRef.current = { signature: '', since: 0, lastAt: 0, keys: [], bestConfidence: 0 };
+        }
         return;
       }
 
-      if (!chordReady) {
-        chordCandidateRef.current = { signature: '', since: 0 };
+      const chordSignature = `${selectedLesson?.id}-${stepIndex}`;
+      const previousCandidate = chordCandidateRef.current;
+      const restartCandidate =
+        previousCandidate.signature !== chordSignature ||
+        matchedKeys.length === 0 ||
+        now - previousCandidate.lastAt > chordCollectWindowMs;
+      const collectedKeys = uniquePianoKeys([
+        ...(restartCandidate ? [] : previousCandidate.keys),
+        ...matchedKeys,
+      ]);
+      const collectedConfidence = collectedKeys.length > 0
+        ? collectedKeys.reduce((total, key) => total + (confidenceByKey.get(key) ?? matchedConfidence), 0) / collectedKeys.length
+        : 0;
+      const bestConfidence = Math.max(
+        restartCandidate ? 0 : previousCandidate.bestConfidence,
+        matchedConfidence,
+        collectedConfidence,
+        pitch.targetConfidence,
+      );
+      const nextCandidate = {
+        signature: chordSignature,
+        since: restartCandidate ? now : previousCandidate.since,
+        lastAt: now,
+        keys: collectedKeys,
+        bestConfidence,
+      };
+      chordCandidateRef.current = nextCandidate;
+      acceptedMatchedKeys = collectedKeys;
+      primaryAttemptNote = acceptedMatchedKeys[0] ?? detectedNote;
+      chordReady =
+        collectedKeys.length === currentStep.keys.length ||
+        (
+          currentStep.keys.length >= 3 &&
+          collectedKeys.length >= 2 &&
+          bestConfidence >= 0.52 &&
+          now - nextCandidate.since >= chordStableWindowMs
+        );
 
-        if (matchedKeys.length > 0) {
-          const missingKeys = currentStep.keys.filter((key) => !matchedKeys.includes(key));
-          const hintSignature = `${selectedLesson?.id}-${stepIndex}-${matchedKeys.join('-')}-${missingKeys.join('-')}`;
+      if (!chordReady) {
+        if (collectedKeys.length > 0) {
+          const missingKeys = currentStep.keys.filter((key) => !collectedKeys.includes(key));
+          const hintSignature = `${selectedLesson?.id}-${stepIndex}-${collectedKeys.join('-')}-${missingKeys.join('-')}`;
 
           if (
             hintSignature !== chordPartialHintRef.current.signature ||
@@ -361,7 +400,7 @@ const LearningApp = () => {
             chordPartialHintRef.current = { signature: hintSignature, at: now };
             setFeedback({
               tone: 'listening',
-              message: `Ik hoor ${prettyKeys(matchedKeys)}. Zoek rustig ${prettyKeys(missingKeys)} erbij.${strikeHint}`,
+              message: `Ik hoor ${prettyKeys(collectedKeys)}. Zoek rustig ${prettyKeys(missingKeys)} erbij.${strikeHint}`,
             });
           }
         }
@@ -369,14 +408,7 @@ const LearningApp = () => {
         return;
       }
 
-      const chordSignature = `${selectedLesson?.id}-${stepIndex}-${matchedKeys.join('-')}`;
-
-      if (chordCandidateRef.current.signature !== chordSignature) {
-        chordCandidateRef.current = { signature: chordSignature, since: now };
-        return;
-      }
-
-      if (now - chordCandidateRef.current.since < chordStableWindowMs) {
+      if (now - nextCandidate.since < chordStableWindowMs) {
         return;
       }
     }
@@ -393,9 +425,9 @@ const LearningApp = () => {
       });
       publishNoteFeedback(
         'correct',
-        chordStep ? `Akkoord: ${prettyKeys(matchedKeys)} · ${strikeLabel}.` : `Goed: ${prettyNote(primaryAttemptNote)} · ${strikeLabel}.`,
+        chordStep ? `Akkoord: ${prettyKeys(acceptedMatchedKeys)} · ${strikeLabel}.` : `Goed: ${prettyNote(primaryAttemptNote)} · ${strikeLabel}.`,
         primaryAttemptNote,
-        matchedKeys.length > 0 ? matchedKeys : [primaryAttemptNote],
+        acceptedMatchedKeys.length > 0 ? acceptedMatchedKeys : [primaryAttemptNote],
       );
 
       if (!selectedLessonAutoPlayable) {
