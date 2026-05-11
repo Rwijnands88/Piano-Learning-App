@@ -50,6 +50,8 @@ const matchingKeysForStep = (keys: PianoKeyName[], step: LessonStep) => (
 );
 
 const minimumChordAttackVolume = 0.0088;
+const minimumSingleAttemptVolume = 0.009;
+const minimumSingleTargetConfidence = 0.4;
 const chordCollectWindowMs = 540;
 const chordStableWindowMs = 110;
 const chordPartialHintCooldownMs = 1200;
@@ -156,7 +158,13 @@ const LearningApp = () => {
   );
   const displayedDetectedNotes = mode === 'manual'
     ? (manualDetectedNote ? [manualDetectedNote] : [])
-    : (pitch.heardKeys.length > 0 ? pitch.heardKeys : pitch.detectedNote ? [pitch.detectedNote] : []);
+    : (
+      pitch.heardKeys.length > 0
+        ? pitch.heardKeys
+        : pitch.detectedNote && pitch.volume >= minimumSingleAttemptVolume && pitch.confidence >= 0.48
+          ? [pitch.detectedNote]
+          : []
+    );
   const displayedDetectedNote = displayedDetectedNotes[0] ?? null;
 
   useEffect(() => {
@@ -297,8 +305,27 @@ const LearningApp = () => {
     const matchedTargetKeys = matchingKeysForStep(pitch.heardKeys, currentStep);
     const detectedNote = pitch.detectedNote;
     const chordStep = isChordStep(currentStep);
+    const confidenceByKey = new Map(pitch.targetAnalysis.map((item) => [item.key, item.confidence]));
+    const singleAttemptReady =
+      chordStep ||
+      (
+        pitch.volume >= minimumSingleAttemptVolume &&
+        (pitch.targetConfidence >= minimumSingleTargetConfidence || pitch.confidence >= 0.58)
+      );
+
+    if (!singleAttemptReady) {
+      return;
+    }
+
+    const detectedNoteTargetConfidence = detectedNote ? confidenceByKey.get(detectedNote) ?? 0 : 0;
     const matchedDetectedNote =
-      !chordStep && detectedNote && detectedNoteMatchesStep(detectedNote, currentStep) ? detectedNote : null;
+      !chordStep &&
+      detectedNote &&
+      detectedNoteMatchesStep(detectedNote, currentStep) &&
+      pitch.volume >= minimumSingleAttemptVolume &&
+      (detectedNoteTargetConfidence >= minimumSingleTargetConfidence || pitch.heardKeys.includes(detectedNote))
+        ? detectedNote
+        : null;
     const matchedKeys = uniquePianoKeys([
       ...matchedTargetKeys,
       ...(matchedDetectedNote ? [matchedDetectedNote] : []),
@@ -321,7 +348,6 @@ const LearningApp = () => {
     const nextStep = selectedLessonAutoPlayable ? selectedLesson?.steps[stepIndex + 1] : undefined;
     let acceptedMatchedKeys = matchedKeys;
     let primaryAttemptNote = acceptedMatchedKeys[0] ?? detectedNote;
-    const confidenceByKey = new Map(pitch.targetAnalysis.map((item) => [item.key, item.confidence]));
     const matchedConfidence =
       matchedKeys.length > 0
         ? matchedKeys.reduce((total, key) => total + (confidenceByKey.get(key) ?? 0.5), 0) / matchedKeys.length
@@ -472,6 +498,7 @@ const LearningApp = () => {
     expectedStepNote,
     lessonCompleted,
     mode,
+    pitch.confidence,
     pitch.detectedNote,
     pitch.heardKeys,
     pitch.strongestTargetNote,
@@ -605,7 +632,9 @@ const LearningApp = () => {
       mode !== 'listen' ||
       !listenAdvanceToNextLesson ||
       !nextLesson ||
-      !pitch.detectedNote
+      !pitch.detectedNote ||
+      pitch.volume < minimumSingleAttemptVolume ||
+      pitch.confidence < 0.5
     ) {
       return;
     }
@@ -626,7 +655,9 @@ const LearningApp = () => {
     listenAdvanceToNextLesson,
     mode,
     nextLesson,
+    pitch.confidence,
     pitch.detectedNote,
+    pitch.volume,
     screen,
     selectedLesson?.id,
   ]);
