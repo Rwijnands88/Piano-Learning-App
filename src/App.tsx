@@ -50,6 +50,8 @@ const matchingKeysForStep = (keys: PianoKeyName[], step: LessonStep) => (
 );
 
 const minimumChordAttackVolume = 0.0105;
+const chordStableWindowMs = 180;
+const chordPartialHintCooldownMs = 1200;
 
 const strikeQualityLabel = (volume: number) => {
   if (volume > 0 && volume < 0.008) {
@@ -95,6 +97,8 @@ const LearningApp = () => {
   const autoAdvanceTimerRef = useRef<number | null>(null);
   const completeScreenReadyAtRef = useRef(0);
   const noteFeedbackPulseRef = useRef(0);
+  const chordCandidateRef = useRef<{ signature: string; since: number }>({ signature: '', since: 0 });
+  const chordPartialHintRef = useRef<{ signature: string; at: number }>({ signature: '', at: 0 });
 
   useEffect(() => {
     if (!selectedLessonId && lessons.length > 0) {
@@ -172,6 +176,11 @@ const LearningApp = () => {
       pulseId: (noteFeedbackPulseRef.current += 1),
     });
   };
+
+  useEffect(() => {
+    chordCandidateRef.current = { signature: '', since: 0 };
+    chordPartialHintRef.current = { signature: '', at: 0 };
+  }, [screen, selectedLessonId, stepIndex]);
 
   const changeMode = (nextMode: LearningMode) => {
     if (nextMode === 'listen') {
@@ -319,10 +328,6 @@ const LearningApp = () => {
           : matchedKeys.length === currentStep.keys.length || (matchedKeys.length >= 2 && matchedConfidence >= 0.62)
       );
 
-    if (chordStep && !chordAttackReady) {
-      return;
-    }
-
     const timingLagMatch =
       selectedLessonAutoPlayable &&
       detectedNote !== null &&
@@ -334,15 +339,46 @@ const LearningApp = () => {
       !detectedNoteMatchesStep(detectedNote, currentStep) &&
       Boolean(nextStep && detectedNoteMatchesStep(detectedNote, nextStep));
 
-    if (chordStep && matchedKeys.length > 0 && chordAttackReady && !chordReady) {
-      const missingKeys = currentStep.keys.filter((key) => !matchedKeys.includes(key));
-      lastAcceptedNoteRef.current = attemptKey;
-      setFeedback({
-        tone: 'warning',
-        message: `Ik hoor ${prettyKeys(matchedKeys)}. Voeg ${prettyKeys(missingKeys)} samen toe. Aanslag: ${strikeLabel}.${strikeHint}`,
-      });
-      publishNoteFeedback('late', `Bijna: ${prettyKeys(matchedKeys)}.`, matchedKeys[0], matchedKeys);
-      return;
+    if (chordStep) {
+      const now = performance.now();
+
+      if (!chordAttackReady) {
+        chordCandidateRef.current = { signature: '', since: 0 };
+        return;
+      }
+
+      if (!chordReady) {
+        chordCandidateRef.current = { signature: '', since: 0 };
+
+        if (matchedKeys.length > 0) {
+          const missingKeys = currentStep.keys.filter((key) => !matchedKeys.includes(key));
+          const hintSignature = `${selectedLesson?.id}-${stepIndex}-${matchedKeys.join('-')}-${missingKeys.join('-')}`;
+
+          if (
+            hintSignature !== chordPartialHintRef.current.signature ||
+            now - chordPartialHintRef.current.at > chordPartialHintCooldownMs
+          ) {
+            chordPartialHintRef.current = { signature: hintSignature, at: now };
+            setFeedback({
+              tone: 'listening',
+              message: `Ik hoor ${prettyKeys(matchedKeys)}. Zoek rustig ${prettyKeys(missingKeys)} erbij.${strikeHint}`,
+            });
+          }
+        }
+
+        return;
+      }
+
+      const chordSignature = `${selectedLesson?.id}-${stepIndex}-${matchedKeys.join('-')}`;
+
+      if (chordCandidateRef.current.signature !== chordSignature) {
+        chordCandidateRef.current = { signature: chordSignature, since: now };
+        return;
+      }
+
+      if (now - chordCandidateRef.current.since < chordStableWindowMs) {
+        return;
+      }
     }
 
     if ((chordStep && chordReady && primaryAttemptNote) || (!chordStep && matchedKeys.length > 0 && primaryAttemptNote)) {

@@ -40,6 +40,11 @@ type PublishedState = {
   volume: number;
 };
 
+type TargetPresenceState = {
+  present: boolean;
+  lastPresentAt: number;
+};
+
 const frequencyByNote = new Map(pianoKeys.map((key) => [key.note, key.frequency]));
 const minimumTargetRms = 0.0068;
 const minimumTargetAttackRms = 0.0085;
@@ -209,6 +214,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
   const sessionRef = useRef(0);
   const targetKeysRef = useRef<PianoKeyName[]>([]);
   const targetSmoothingRef = useRef<Record<string, number>>({});
+  const targetPresenceRef = useRef<Record<string, TargetPresenceState>>({});
   const ambientRmsRef = useRef(0.004);
   const candidateRef = useRef<{ note: PianoKeyName | null; since: number; frames: number }>({ note: null, since: 0, frames: 0 });
   const lastPublishedRef = useRef<PublishedState>(emptyPublishedState);
@@ -217,6 +223,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
   useEffect(() => {
     targetKeysRef.current = uniqueKeys(targetKeys);
     targetSmoothingRef.current = {};
+    targetPresenceRef.current = {};
     ambientRmsRef.current = 0.004;
   }, [targetSignature]);
 
@@ -251,6 +258,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
     setVolume(0);
     candidateRef.current = { note: null, since: 0, frames: 0 };
     targetSmoothingRef.current = {};
+    targetPresenceRef.current = {};
     ambientRmsRef.current = 0.004;
     lastPublishedRef.current = emptyPublishedState;
   }, []);
@@ -392,6 +400,7 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
           ? noteFromFrequency(nextFrequency)
           : null;
         const targets = targetKeysRef.current;
+        const now = performance.now();
         const rawTargetAnalysis = targets.map((key) => ({
           key,
           confidence: targetConfidenceFromSpectrum(key, frequencyInput, audioContext.sampleRate, analyser.fftSize, rms, nextNote, ambientRms),
@@ -400,12 +409,23 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
         }));
         const targetThreshold = targets.length > 1 ? 0.56 : 0.52;
         const nextSmoothing: Record<string, number> = {};
+        const nextPresence: Record<string, TargetPresenceState> = {};
         const nextTargetAnalysis = rawTargetAnalysis.map((item) => {
           const previousConfidence = targetSmoothingRef.current[item.key] ?? 0;
+          const previousPresence = targetPresenceRef.current[item.key];
           const smoothedConfidence = clamp01(previousConfidence * 0.64 + item.confidence * 0.36);
           const hasAttack = rms >= minimumTargetAttackRms && rms > ambientRms * 1.45;
-          const present = hasAttack && (smoothedConfidence >= targetThreshold || item.confidence >= targetThreshold + 0.18);
+          const attackPresent = hasAttack && (smoothedConfidence >= targetThreshold || item.confidence >= targetThreshold + 0.18);
+          const heldPresent =
+            Boolean(previousPresence?.present) &&
+            smoothedConfidence >= targetThreshold - 0.18 &&
+            now - previousPresence.lastPresentAt < 260;
+          const present = attackPresent || heldPresent;
           nextSmoothing[item.key] = smoothedConfidence;
+          nextPresence[item.key] = {
+            present,
+            lastPresentAt: present ? now : previousPresence?.lastPresentAt ?? 0,
+          };
 
           return {
             ...item,
@@ -414,13 +434,13 @@ export const usePitchDetection = (mode: LearningMode, enabled: boolean, targetKe
           };
         });
         targetSmoothingRef.current = nextSmoothing;
+        targetPresenceRef.current = nextPresence;
 
         const nextHeardKeys = nextTargetAnalysis.filter((item) => item.present).map((item) => item.key);
         const strongestTarget = nextTargetAnalysis.reduce<TargetNoteAnalysis | null>(
           (strongest, item) => (!strongest || item.confidence > strongest.confidence ? item : strongest),
           null,
         );
-        const now = performance.now();
 
         if (nextNote) {
           const candidate = candidateRef.current;
