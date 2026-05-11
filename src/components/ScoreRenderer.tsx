@@ -122,6 +122,7 @@ const restDurationsForBeats = (beats: number): Array<'h' | 'q' | '8' | '16'> => 
 type ScoreLayout = {
   minOffset: number;
   maxOffset: number;
+  preRollBeats: number;
   playheadX: number;
   positions: Array<{ beat: number; x: number }>;
   scrolling: boolean;
@@ -197,9 +198,27 @@ export const ScoreRenderer = ({
       warning: 'late',
       error: 'wrong',
     } satisfies Record<FeedbackState['tone'], PracticeNoteFeedbackKind>)[feedbackTone];
+  const updateTimingCue = useCallback((nextBeat: number) => {
+    const renderer = containerRef.current?.parentElement;
+
+    if (!renderer) {
+      return;
+    }
+
+    const nextPlayableEvent = scoreEvents.find((event) => event.beatStart > nextBeat + 0.035 && event.keys.length > 0 && !event.isRest);
+    const beatsUntilCue = nextPlayableEvent ? nextPlayableEvent.beatStart - nextBeat : Number.POSITIVE_INFINITY;
+    const cueWindowBeats = 1.25;
+    const cueProgress = Number.isFinite(beatsUntilCue) ? Math.max(0, Math.min(1, 1 - beatsUntilCue / cueWindowBeats)) : 0;
+
+    renderer.classList.toggle('cue-active', cueProgress > 0 && cueProgress < 1);
+    renderer.style.setProperty('--cue-glow-opacity', (0.24 + cueProgress * 0.76).toFixed(2));
+    renderer.style.setProperty('--cue-glow-scale', (0.84 + cueProgress * 0.24).toFixed(2));
+    renderer.style.setProperty('--cue-zone-opacity', (0.22 + cueProgress * 0.42).toFixed(2));
+  }, [scoreEvents]);
   const updateFeedbackOverlay = useCallback((stepIndex: number, kind: PracticeNoteFeedbackKind, feedback?: PracticeNoteFeedback) => {
     const container = containerRef.current;
     const layout = layoutRef.current;
+    const viewport = container?.parentElement;
 
     if (!container || !layout || layout.positions.length === 0) {
       return;
@@ -207,17 +226,21 @@ export const ScoreRenderer = ({
 
     const event = scoreEvents[stepIndex];
     const position = layout.positions[Math.min(stepIndex, layout.positions.length - 2)];
-    let marker = container.querySelector<HTMLDivElement>('.score-note-target');
+    const markerHost = layout.scrolling && viewport ? viewport : container;
+    let marker = markerHost.querySelector<HTMLDivElement>(':scope > .score-note-target');
 
     if (!event || !position) {
-      marker?.remove();
+      container.querySelectorAll<HTMLDivElement>('.score-note-target').forEach((target) => target.remove());
+      viewport?.querySelectorAll<HTMLDivElement>(':scope > .score-note-target').forEach((target) => target.remove());
       return;
     }
 
     if (!marker) {
+      container.querySelectorAll<HTMLDivElement>('.score-note-target').forEach((target) => target.remove());
+      viewport?.querySelectorAll<HTMLDivElement>(':scope > .score-note-target').forEach((target) => target.remove());
       marker = document.createElement('div');
       marker.setAttribute('aria-hidden', 'true');
-      container.appendChild(marker);
+      markerHost.appendChild(marker);
     }
 
     const label = event.keys[0]?.replace('#', '♯') ?? (event.isRest ? 'rust' : 'nu');
@@ -226,12 +249,14 @@ export const ScoreRenderer = ({
     const leftSpan = Math.abs(position.x - previousPosition.x);
     const rightSpan = Math.abs(nextPosition.x - position.x);
     const localSpacing = Math.max(leftSpan || rightSpan, rightSpan || leftSpan, 88);
-    const hitWindowWidth = event.isRest ? Math.min(118, Math.max(72, localSpacing * 0.46)) : Math.min(152, Math.max(82, localSpacing * 0.62));
+    const hitWindowWidth = layout.scrolling
+      ? (event.isRest ? 64 : 78)
+      : event.isRest ? Math.min(118, Math.max(72, localSpacing * 0.46)) : Math.min(152, Math.max(82, localSpacing * 0.62));
 
     marker.className = `score-note-target ${kind}`;
     marker.dataset.label = label;
     marker.dataset.message = feedback?.message ?? '';
-    marker.style.left = `${position.x}px`;
+    marker.style.left = `${layout.scrolling ? layout.playheadX : position.x}px`;
     marker.style.width = `${hitWindowWidth}px`;
     marker.style.top = `${layout.noteTop}px`;
     marker.style.height = `${layout.noteHeight}px`;
@@ -246,25 +271,34 @@ export const ScoreRenderer = ({
       return;
     }
 
+    updateTimingCue(nextBeat);
+
     const lastPosition = layout.positions.at(-1) ?? layout.positions[0];
-    const clampedBeat = Math.max(0, Math.min(nextBeat, lastPosition.beat));
+    const clampedBeat = Math.max(-layout.preRollBeats, Math.min(nextBeat, lastPosition.beat));
     let left = layout.positions[0];
     let right = lastPosition;
+    let playheadTargetX = layout.positions[0]?.x ?? layout.playheadX;
 
-    for (let index = 0; index < layout.positions.length - 1; index += 1) {
-      const current = layout.positions[index];
-      const next = layout.positions[index + 1];
+    if (layout.scrolling && clampedBeat < 0) {
+      const preRollProgress = layout.preRollBeats > 0 ? Math.max(0, Math.min(1, (clampedBeat + layout.preRollBeats) / layout.preRollBeats)) : 1;
+      const firstPosition = layout.positions[0] ?? { x: layout.playheadX };
+      playheadTargetX = layout.playheadX + (firstPosition.x - layout.playheadX) * preRollProgress;
+    } else {
+      for (let index = 0; index < layout.positions.length - 1; index += 1) {
+        const current = layout.positions[index];
+        const next = layout.positions[index + 1];
 
-      if (clampedBeat >= current.beat && clampedBeat <= next.beat) {
-        left = current;
-        right = next;
-        break;
+        if (clampedBeat >= current.beat && clampedBeat <= next.beat) {
+          left = current;
+          right = next;
+          break;
+        }
       }
-    }
 
-    const beatSpan = Math.max(0.0001, right.beat - left.beat);
-    const localProgress = Math.max(0, Math.min(1, (clampedBeat - left.beat) / beatSpan));
-    const playheadTargetX = left.x + (right.x - left.x) * localProgress;
+      const beatSpan = Math.max(0.0001, right.beat - left.beat);
+      const localProgress = Math.max(0, Math.min(1, (clampedBeat - left.beat) / beatSpan));
+      playheadTargetX = left.x + (right.x - left.x) * localProgress;
+    }
 
     if (!layout.scrolling) {
       viewport?.style.setProperty('--score-playhead-x', `${playheadTargetX}px`);
@@ -275,7 +309,7 @@ export const ScoreRenderer = ({
     const offset = Math.min(layout.maxOffset, Math.max(layout.minOffset, layout.playheadX - playheadTargetX));
 
     container.style.transform = `translate3d(${offset}px, 0, 0)`;
-  }, []);
+  }, [updateTimingCue]);
 
   useEffect(() => {
     currentBeatRef.current = currentBeat;
@@ -336,13 +370,13 @@ export const ScoreRenderer = ({
           ? Math.max(viewportWidth, leadIn + Math.max(scoreEvents.length * 62, displayTotalBeats * pixelsPerBeat) + tailOut)
           : viewportWidth;
         const height = viewportHeight;
-        const staveX = scrollingScore ? Math.max(compact ? 28 : 42, leadIn * 0.68) : Math.max(compact ? 56 : 72, viewportWidth * 0.07);
+        const staveX = scrollingScore ? Math.max(compact ? 64 : 84, leadIn * 0.94) : Math.max(compact ? 56 : 72, viewportWidth * 0.07);
         const lineSpacing = grandStaff
-          ? Math.max(compact ? 22 : 25, Math.min(36, height * 0.082))
-          : Math.max(compact ? 29 : 33, Math.min(46, height * 0.14));
-        const musicFontSize = grandStaff ? (compact ? 48 : 54) : compact ? 60 : 68;
-        const accidentalFontSize = grandStaff ? (compact ? 33 : 37) : compact ? 38 : 42;
-        const topStaveY = grandStaff ? Math.max(18, height * 0.07) : Math.max(18, height * 0.16);
+          ? Math.max(compact ? 19 : 21, Math.min(30, height * 0.07))
+          : Math.max(compact ? 24 : 27, Math.min(35, height * 0.11));
+        const musicFontSize = grandStaff ? (compact ? 33 : 35) : compact ? 36 : 38;
+        const accidentalFontSize = grandStaff ? (compact ? 21 : 23) : compact ? 23 : 25;
+        const topStaveY = grandStaff ? Math.max(18, height * 0.075) : Math.max(18, height * 0.13);
         const bassStaveY = topStaveY + lineSpacing * 6.25;
         const staveWidth = scrollingScore
           ? width - staveX - Math.max(120, tailOut * 0.72)
@@ -390,6 +424,7 @@ export const ScoreRenderer = ({
             clef,
             autoStem: true,
           });
+          note.setFontSize(musicFontSize);
           note.noteHeads.forEach((noteHead) => noteHead.setFontSize(musicFontSize));
 
           if (hidden && !isStepRest) {
@@ -480,6 +515,8 @@ export const ScoreRenderer = ({
             x: lastPosition + noteSpacing * 0.95,
           },
         ];
+        const firstPositionX = positions[0]?.x ?? playheadX;
+        const startOffset = scrollingScore ? Math.max(0, playheadX - firstPositionX) : 0;
         const xForBeat = (beat: number) => {
           const finalPosition = positions.at(-1) ?? positions[0];
           let left = positions[0];
@@ -525,7 +562,8 @@ export const ScoreRenderer = ({
 
         layoutRef.current = {
           minOffset: Math.min(0, viewportWidth - width),
-          maxOffset: 0,
+          maxOffset: startOffset,
+          preRollBeats: scrollingScore ? 0.9 : 0,
           playheadX,
           positions,
           scrolling: scrollingScore,

@@ -216,6 +216,21 @@ const LearningApp = () => {
       return;
     }
 
+    const previousExpectedNote = selectedLessonAutoPlayable
+      ? (selectedLesson?.steps[stepIndex - 1]?.expectedNote ?? selectedLesson?.steps[stepIndex - 1]?.keys[0])
+      : undefined;
+    const nextExpectedNote = selectedLessonAutoPlayable
+      ? (selectedLesson?.steps[stepIndex + 1]?.expectedNote ?? selectedLesson?.steps[stepIndex + 1]?.keys[0])
+      : undefined;
+    const timingLagMatch =
+      selectedLessonAutoPlayable &&
+      pitch.detectedNote !== expectedStepNote &&
+      pitch.detectedNote === previousExpectedNote;
+    const timingEarlyMatch =
+      selectedLessonAutoPlayable &&
+      pitch.detectedNote !== expectedStepNote &&
+      pitch.detectedNote === nextExpectedNote;
+
     if (pitch.detectedNote === expectedStepNote) {
       lastAcceptedNoteRef.current = attemptKey;
       setFeedback({
@@ -231,6 +246,24 @@ const LearningApp = () => {
           goNext();
         }, 650);
       }
+    } else if (timingLagMatch) {
+      lastAcceptedNoteRef.current = attemptKey;
+      setFeedback({
+        tone: 'success',
+        message: `${pitch.detectedNote.replace('#', '♯')} klopt. De microfoon hoorde hem net later.`,
+      });
+      publishNoteFeedback('correct', `Goed: ${pitch.detectedNote.replace('#', '♯')}.`, pitch.detectedNote);
+    } else if (timingEarlyMatch) {
+      lastAcceptedNoteRef.current = attemptKey;
+      setFeedback({
+        tone: 'warning',
+        message: `${pitch.detectedNote.replace('#', '♯')} is net vroeg. Wacht op de gloed.`,
+      });
+      publishNoteFeedback(
+        'late',
+        `${pitch.detectedNote.replace('#', '♯')} net vroeg.`,
+        pitch.detectedNote,
+      );
     } else {
       setFeedback({
         tone: 'error',
@@ -252,6 +285,7 @@ const LearningApp = () => {
     screen,
     selectedLessonAutoPlayable,
     selectedLesson?.id,
+    selectedLesson?.steps,
     stepIndex,
   ]);
 
@@ -383,11 +417,19 @@ const LearningApp = () => {
         window.clearTimeout(autoAdvanceTimerRef.current);
       }
 
-      setFeedback({ tone: 'success', message: `${note.replace('#', '♯')} klopt. Door naar de volgende stap.` });
+      setFeedback({
+        tone: 'success',
+        message: selectedLessonAutoPlayable
+          ? `${note.replace('#', '♯')} klopt. Blijf in de puls.`
+          : `${note.replace('#', '♯')} klopt. Door naar de volgende stap.`,
+      });
       publishNoteFeedback('correct', `Goed: ${note.replace('#', '♯')}.`, note);
-      autoAdvanceTimerRef.current = window.setTimeout(() => {
-        goNext();
-      }, 450);
+
+      if (!selectedLessonAutoPlayable) {
+        autoAdvanceTimerRef.current = window.setTimeout(() => {
+          goNext();
+        }, 450);
+      }
       return;
     }
 

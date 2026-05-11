@@ -86,14 +86,41 @@ const recognitionForStep = (step: LessonStep): RecognitionMode => {
 
 export const lessonSupportsAutoplay = (lesson: Lesson) => {
   const moduleName = lesson.module.toLowerCase();
-
-  return (
-    lesson.source === 'traditional' ||
-    lesson.source === 'public-domain' ||
+  const title = lesson.title.toLowerCase();
+  const focusText = lesson.focus?.join(' ').toLowerCase() ?? '';
+  const v2PilotLesson = lesson.id === 'lees-c-d-e' || lesson.id === 'basisakkoorden-c-g-f-am' || lesson.id === 'ode-aan-de-vreugde-zin';
+  const musicModule =
     moduleName.includes('eerste melodieen') ||
+    moduleName.includes('akkoorden en harmonie') ||
+    moduleName.includes('linkerhand begeleiding') ||
+    moduleName.includes('twee handen samen') ||
     moduleName.includes('repertoire') ||
     moduleName.includes('klassieke') ||
-    moduleName.includes('minimalistische')
+    moduleName.includes('minimalistische');
+  const originalMusicStudy =
+    lesson.source === 'original' &&
+    (
+      focusText.includes('muzikale') ||
+      focusText.includes('melodie') ||
+      focusText.includes('repertoire') ||
+      focusText.includes('twee handen') ||
+      focusText.includes('begeleiding') ||
+      focusText.includes('akkoordprogressie') ||
+      focusText.includes('minimalisme') ||
+      focusText.includes('nocturne') ||
+      title.includes('etude') ||
+      title.includes('studie') ||
+      title.includes('progressie') ||
+      title.includes('ostinato') ||
+      title.includes('cadans')
+    );
+
+  return (
+    v2PilotLesson ||
+    lesson.source === 'traditional' ||
+    lesson.source === 'public-domain' ||
+    musicModule ||
+    originalMusicStudy
   );
 };
 

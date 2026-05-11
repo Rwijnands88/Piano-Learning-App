@@ -4,6 +4,7 @@ import { prettyKeys } from '../data/piano';
 import { createScoreTimeline } from '../music/scoreTimeline';
 import { useScoreTransport } from '../music/useScoreTransport';
 import { PremiumKeyboard } from './PremiumKeyboard';
+import { PracticePlayerV2 } from './PracticePlayerV2';
 import { ScoreRenderer } from './ScoreRenderer';
 import type { FeedbackState, LearningMode, Lesson, LessonStep, PianoKeyName, PracticeNoteFeedback, PracticeProfile } from '../types';
 
@@ -140,6 +141,29 @@ export const PracticeScreen = ({
     setScorePlaying(false);
     onRestart();
   };
+
+  if (timeline.autoPlayable) {
+    return (
+      <PracticePlayerV2
+        completed={completed}
+        detectedNote={detectedNote}
+        feedback={feedback}
+        isListening={isListening}
+        lesson={lesson}
+        mode={mode}
+        noteFeedback={noteFeedback}
+        onBackHome={onBackHome}
+        onKeyPress={onKeyPress}
+        onModeChange={onModeChange}
+        onRestart={onRestart}
+        onTransportComplete={onTransportComplete}
+        onTransportStepChange={onTransportStepChange}
+        practiceProfile={practiceProfile}
+        step={step}
+        stepIndex={stepIndex}
+      />
+    );
+  }
 
   return (
     <section

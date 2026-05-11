@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
+import { lessonSupportsAutoplay } from '../music/scoreTimeline';
 import type { Lesson, PracticeProfile } from '../types';
 
 type HomePanel = 'today' | 'path' | 'repertoire' | 'workouts' | 'growth' | 'studio';
@@ -47,17 +48,11 @@ type HomeScreenProps = {
 const panelItems: Array<{ id: HomePanel; title: string; subtitle: string; icon: typeof Sparkles }> = [
   { id: 'today', title: 'Vandaag', subtitle: 'Je sessie', icon: Sparkles },
   { id: 'path', title: 'Leerlijn', subtitle: 'Stap voor stap', icon: MapIcon },
-  { id: 'repertoire', title: 'Repertoire', subtitle: 'Stukken', icon: Library },
+  { id: 'repertoire', title: 'Muziek', subtitle: 'Meespelen', icon: Library },
   { id: 'workouts', title: 'Workouts', subtitle: 'Korte training', icon: Flame },
   { id: 'growth', title: 'Groei', subtitle: 'Voortgang', icon: Trophy },
   { id: 'studio', title: 'Studio', subtitle: 'Account', icon: SlidersHorizontal },
 ];
-
-const sourceLabel = {
-  mixed: 'Kernlessen + Firestore',
-  firestore: 'Firestore lessen',
-  bundled: 'Lokale lessen',
-};
 
 const compactModuleName = (module: string) => module.replace(/^\d+\.\s*/, '');
 
@@ -104,9 +99,9 @@ const panelMeta = {
     text: 'Modules lopen horizontaal door als levels. Alles is direct te starten vanuit de route.',
   },
   repertoire: {
-    eyebrow: 'Bibliotheek',
-    title: 'Stukken die als muziek voelen',
-    text: 'Repertoire met langere sessies, herkenbare melodieen en duidelijke voortgang.',
+    eyebrow: 'Muziekmodus',
+    title: 'Kies een stuk en speel direct mee',
+    text: 'Alle muzieklessen gebruiken nu de rustige scrollspeler met aftellen, tempo en visuele timing.',
   },
   workouts: {
     eyebrow: 'Training',
@@ -125,11 +120,51 @@ const panelMeta = {
   },
 } satisfies Record<HomePanel, { eyebrow: string; title: string; text: string }>;
 
+const lessonArtworkClass = (lesson?: Lesson) => {
+  if (!lesson) {
+    return 'notes';
+  }
+
+  const lessonText = `${lesson.module} ${lesson.title} ${lesson.focus?.join(' ') ?? ''} ${lesson.source ?? ''}`.toLowerCase();
+
+  if (lessonText.includes('workout') || lessonText.includes('warm-up') || lessonText.includes('training')) {
+    return 'workout';
+  }
+
+  if (lessonText.includes('akkoord') || lessonText.includes('chord') || lessonText.includes('harmonie')) {
+    return 'chord';
+  }
+
+  if (
+    lesson.source === 'traditional' ||
+    lesson.source === 'public-domain' ||
+    lessonText.includes('repertoire') ||
+    lessonText.includes('ode') ||
+    lessonText.includes('birthday') ||
+    lessonText.includes('twinkle')
+  ) {
+    return 'piece';
+  }
+
+  if (lessonText.includes('ritme') || lessonText.includes('timing') || lessonText.includes('maat')) {
+    return 'rhythm';
+  }
+
+  if (lessonText.includes('twee handen') || lessonText.includes('linkerhand') || lessonText.includes('rechterhand')) {
+    return 'hands';
+  }
+
+  if (lessonText.includes('zwart')) {
+    return 'black-keys';
+  }
+
+  return 'notes';
+};
+
 export const HomeScreen = ({
   lessons,
   selectedLessonId,
   completedLessonIds,
-  source,
   userName,
   onStartPractice,
   onStartLesson,
@@ -163,20 +198,7 @@ export const HomeScreen = ({
     return Object.entries(groups);
   }, [lessons]);
 
-  const repertoireLessons = useMemo(
-    () =>
-      lessons.filter((lesson) => {
-        const moduleName = lesson.module.toLowerCase();
-        return (
-          lesson.source === 'traditional' ||
-          lesson.source === 'public-domain' ||
-          moduleName.includes('repertoire') ||
-          moduleName.includes('klassieke') ||
-          moduleName.includes('minimalistische')
-        );
-      }),
-    [lessons],
-  );
+  const repertoireLessons = useMemo(() => lessons.filter(lessonSupportsAutoplay), [lessons]);
 
   const workoutLessons = useMemo(
     () => lessons.filter((lesson) => lesson.module.toLowerCase().includes('workout') || lesson.tags?.includes('workout')),
@@ -186,10 +208,13 @@ export const HomeScreen = ({
   const recommendedWorkout = workoutLessons.find((lesson) => !completedLessonIds.has(lesson.id)) ?? workoutLessons[0];
   const recommendedPiece =
     repertoireLessons.find((lesson) => !completedLessonIds.has(lesson.id)) ?? repertoireLessons[0] ?? nextLesson;
+  const completedMusicCount = repertoireLessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
+  const musicPercent = repertoireLessons.length > 0 ? Math.round((completedMusicCount / repertoireLessons.length) * 100) : 0;
+  const musicMinutes = repertoireLessons.reduce((total, lesson) => total + (lesson.estimatedMinutes ?? 0), 0);
   const todayPlan = [
     recommendedWorkout ? { label: 'Warm-up', lesson: recommendedWorkout, detail: 'Maak handen en oren wakker' } : null,
     nextLesson ? { label: 'Nieuwe stap', lesson: nextLesson, detail: 'De volgende les in je leerlijn' } : null,
-    recommendedPiece ? { label: 'Muziekstuk', lesson: recommendedPiece, detail: 'Speel iets dat als muziek voelt' } : null,
+    recommendedPiece ? { label: 'Muziekmodus', lesson: recommendedPiece, detail: 'Start de scrollspeler direct' } : null,
   ].filter(Boolean) as Array<{ label: string; lesson: Lesson; detail: string }>;
 
   const activeModuleName = nextLesson?.module ?? selectedLesson?.module ?? modules[0]?.[0];
@@ -317,6 +342,14 @@ export const HomeScreen = ({
 
   const currentPanel = panelMeta[activePanel];
   const NextAchievementIcon = nextAchievement.icon;
+  const maxSkillTotal = Math.max(...skillStats.map((stat) => stat.total), 1);
+  const renderLessonArtwork = (lesson: Lesson | undefined, className = 'neo-lesson-art') => (
+    <span className={`${className} ${lessonArtworkClass(lesson)}`} aria-hidden="true">
+      <i />
+      <i />
+      <i />
+    </span>
+  );
 
   return (
     <section className="premium-stage premium-live-stage premium-home-live neo-home" aria-label="Startscherm">
@@ -419,6 +452,7 @@ export const HomeScreen = ({
                       type="button"
                     >
                       <i aria-hidden="true" />
+                      {renderLessonArtwork(lesson)}
                       <small>{label}</small>
                       <strong>{lesson.title}</strong>
                       <span>{detail}</span>
@@ -460,6 +494,7 @@ export const HomeScreen = ({
                           <em>{statusLabel[status]}</em>
                         </div>
                         <button className="neo-route-main" onClick={() => firstOpen && startLesson(firstOpen.id)} type="button">
+                          {renderLessonArtwork(firstOpen, 'neo-route-art')}
                           <strong>{compactModuleName(module)}</strong>
                           <small>{firstOpen?.title ?? 'Module voltooid'}</small>
                           <div className="neo-mini-progress" aria-label={`${percent}% afgerond`}>
@@ -517,7 +552,7 @@ export const HomeScreen = ({
                         onClick={() => startLesson(lesson.id)}
                         type="button"
                       >
-                        <Music2 aria-hidden="true" />
+                        {renderLessonArtwork(lesson, 'neo-row-cover')}
                         <span>
                           <strong>{lesson.title}</strong>
                           <small>{lesson.estimatedMinutes ?? 8} min · {lesson.steps.length} stappen</small>
@@ -544,7 +579,7 @@ export const HomeScreen = ({
                         onClick={() => startLesson(lesson.id)}
                         type="button"
                       >
-                        <Flame aria-hidden="true" />
+                        {renderLessonArtwork(lesson, 'neo-workout-art')}
                         <strong>{lesson.title}</strong>
                         <span>{lesson.focus?.join(' · ') ?? 'training'}</span>
                         <i>{completed ? 'Claimed' : lesson.id === recommendedWorkout?.id ? 'Daily boost' : `${lesson.estimatedMinutes ?? 6} min`}</i>
@@ -645,11 +680,24 @@ export const HomeScreen = ({
                     </div>
                   </article>
 
-                  <article className="neo-studio-unit">
+                  <article className="neo-studio-unit music">
                     <ListMusic aria-hidden="true" />
-                    <small>Bron</small>
-                    <strong>{sourceLabel[source]}</strong>
-                    <span>{lessons.length} lessen · {totalMinutes} oefenminuten</span>
+                    <small>Muziekmodus</small>
+                    <strong>{completedMusicCount}/{repertoireLessons.length} stukken</strong>
+                    <span>Scrollspeler actief voor alle muziek · {musicMinutes} speelminuten</span>
+                    <div className="neo-music-bars" aria-label={`${musicPercent}% muziek afgerond`}>
+                      {[0.38, 0.62, 0.82, 0.5, 0.72].map((height, index) => (
+                        <i
+                          key={height}
+                          style={
+                            {
+                              '--bar': `${Math.max(18, Math.round(height * Math.max(musicPercent, 34)))}%`,
+                              '--delay': `${index * 70}ms`,
+                            } as CSSProperties
+                          }
+                        />
+                      ))}
+                    </div>
                   </article>
 
                   <article className="neo-studio-unit danger">
@@ -692,15 +740,23 @@ export const HomeScreen = ({
           </section>
 
           <section className="neo-hud-card compact">
-            <small>Unlocks</small>
-            <strong>{unlockedModules}/{modules.length}</strong>
-            <span>hoofdstukken beschikbaar</span>
+            <small>Muziekmodus</small>
+            <strong>{repertoireLessons.length}</strong>
+            <span>lessen met scrollspeler</span>
           </section>
 
-          <section className="neo-hud-card compact">
-            <small>Studio profiel</small>
-            <strong>{displayProfile.title}</strong>
-            <span>{sourceLabel[source]}</span>
+          <section className="neo-hud-card neo-skill-micro">
+            <small>Focus radar</small>
+            <div className="neo-hud-bars" aria-label="Vaardigheden grafiek">
+              {skillStats.slice(0, 4).map(({ skill, total }) => (
+                <span key={skill} style={{ '--bar': `${Math.max(24, Math.round((total / maxSkillTotal) * 100))}%` } as CSSProperties}>
+                  <i />
+                  <em>{skill}</em>
+                </span>
+              ))}
+            </div>
+            <strong>{skillStats[0]?.skill ?? 'Start je eerste sessie'}</strong>
+            <span>{skillStats[0] ? `${skillStats[0].done}/${skillStats[0].total} lessen afgerond` : 'Nog geen oefendata'}</span>
           </section>
         </aside>
       </div>

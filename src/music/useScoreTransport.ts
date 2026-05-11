@@ -7,6 +7,9 @@ type UseScoreTransportOptions = {
   speedPercent: number;
   activeStepIndex: number;
   disabled?: boolean;
+  preRollBeats?: number;
+  stepLeadBeats?: number;
+  stepLateBeats?: number;
   onStepChange: (stepIndex: number) => void;
   onEnd: () => void;
 };
@@ -18,8 +21,20 @@ type ScoreTransportState = {
   seekToStep: (stepIndex: number) => void;
 };
 
-const clampBeat = (timeline: ScoreTimeline, beat: number) =>
-  Math.max(0, Math.min(beat, timeline.totalBeats));
+const clampBeat = (timeline: ScoreTimeline, beat: number, preRollBeats = 0) =>
+  Math.max(-preRollBeats, Math.min(beat, timeline.totalBeats));
+
+const targetStepIndexForBeat = (timeline: ScoreTimeline, beat: number, leadBeats: number, lateBeats: number) => {
+  if (leadBeats <= 0) {
+    return stepIndexForBeat(timeline, beat);
+  }
+
+  const targetEvent = timeline.events.find(
+    (event) => event.beatStart <= beat + leadBeats && beat <= event.beatStart + lateBeats,
+  );
+
+  return targetEvent?.stepIndex ?? stepIndexForBeat(timeline, beat);
+};
 
 export const useScoreTransport = ({
   timeline,
@@ -27,10 +42,13 @@ export const useScoreTransport = ({
   speedPercent,
   activeStepIndex,
   disabled = false,
+  preRollBeats = 0,
+  stepLeadBeats = 0,
+  stepLateBeats = 0.16,
   onStepChange,
   onEnd,
 }: UseScoreTransportOptions): ScoreTransportState => {
-  const [currentBeat, setCurrentBeat] = useState(() => beatForStep(timeline, activeStepIndex));
+  const [currentBeat, setCurrentBeat] = useState(() => (activeStepIndex === 0 ? -preRollBeats : beatForStep(timeline, activeStepIndex)));
   const frameRef = useRef<number | null>(null);
   const currentBeatRef = useRef(currentBeat);
   const startBeatRef = useRef(currentBeat);
@@ -47,24 +65,24 @@ export const useScoreTransport = ({
   }, [onEnd, onStepChange]);
 
   const publishBeat = useCallback((beat: number) => {
-    const nextBeat = clampBeat(timeline, beat);
+    const nextBeat = clampBeat(timeline, beat, preRollBeats);
     currentBeatRef.current = nextBeat;
     setCurrentBeat(nextBeat);
 
-    const nextStep = stepIndexForBeat(timeline, nextBeat);
+    const nextStep = targetStepIndexForBeat(timeline, nextBeat, stepLeadBeats, stepLateBeats);
     if (nextStep !== lastPublishedStepRef.current) {
       lastPublishedStepRef.current = nextStep;
       onStepChangeRef.current(nextStep);
     }
-  }, [timeline]);
+  }, [preRollBeats, stepLateBeats, stepLeadBeats, timeline]);
 
   const seekToStep = useCallback((stepIndex: number) => {
-    const nextBeat = beatForStep(timeline, stepIndex);
+    const nextBeat = stepIndex === 0 ? -preRollBeats : beatForStep(timeline, stepIndex);
     lastPublishedStepRef.current = stepIndex;
     currentBeatRef.current = nextBeat;
     startBeatRef.current = nextBeat;
     setCurrentBeat(nextBeat);
-  }, [timeline]);
+  }, [preRollBeats, timeline]);
 
   useEffect(() => {
     const lessonChanged = timeline.lessonId !== observedLessonRef.current;
@@ -96,7 +114,7 @@ export const useScoreTransport = ({
     const tick = (now: number) => {
       const elapsedSeconds = (now - startTimeRef.current) / 1000;
       const beatsPerSecond = (timeline.tempo / 60) * (speedPercent / 100);
-      const nextBeat = clampBeat(timeline, startBeatRef.current + elapsedSeconds * beatsPerSecond);
+      const nextBeat = clampBeat(timeline, startBeatRef.current + elapsedSeconds * beatsPerSecond, preRollBeats);
 
       publishBeat(nextBeat);
 
@@ -117,10 +135,10 @@ export const useScoreTransport = ({
         frameRef.current = null;
       }
     };
-  }, [disabled, playing, publishBeat, speedPercent, timeline]);
+  }, [disabled, playing, preRollBeats, publishBeat, speedPercent, timeline]);
 
   const activeEvent = useMemo(() => eventAtBeat(timeline, currentBeat), [currentBeat, timeline]);
-  const totalProgress = timeline.totalBeats > 0 ? Math.min(100, (currentBeat / timeline.totalBeats) * 100) : 0;
+  const totalProgress = timeline.totalBeats > 0 ? Math.max(0, Math.min(100, (currentBeat / timeline.totalBeats) * 100)) : 0;
 
   return {
     currentBeat,
